@@ -267,12 +267,25 @@ for each in backupDTs:
     tDiff.append(diff)
     diffRes[diff] = each
 
+# get the newest backup file
+newestBackup = diffRes[min(tDiff)].strftime('%Y%m%d')
+# get backup filesize information
+cmd = """ls -l --block-size=M {}""".format(loc+'/backup/*{}*'.format(newestBackup))
+# run bash command and get response
+response = bashCMD(cmd)
+# process the response (fize size in MB)
+fileSize = float(response.split(' ')[4].replace('M',''))
+
+# check if the backup filesize is at least 10 MB
+if fileSize <= 10:
+    print(colRed.format('Backup file size {} less than 10 MB'.format(fileSize)))
+
 # get the newest backup
 newestBackup = diffRes[min(tDiff)].strftime('%Y-%m-%d')
 # check age of the backup
 if len(backupDates) >= 1:
     if min(tDiff) <= MAXBACKUPAGE:
-        print('Recent backup available (Last backup on: {}): {}'.format(newestBackup,colGreen.format('OK')))
+        print('Recent backup available (Last backup on: {}, filesize: {}MB): {}'.format(newestBackup,fileSize,colGreen.format('OK')))
         summary.append('Backup check passed: OK')
         backupFlag = True
     else:
@@ -361,6 +374,7 @@ fullLog[key] = clientID
 # site_id
 key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
+
 
 # write data to disk
 # data filename
