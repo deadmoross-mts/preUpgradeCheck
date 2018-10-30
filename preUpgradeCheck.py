@@ -40,6 +40,26 @@ def processDfOutput(response):
     
     return(dfOutput)
 
+# create a function to execute bash commands
+def bashCMD(command):
+    # open a process
+    process = subprocess.Popen('/bin/bash', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # execute command and capture result
+    response, err = process.communicate(command)
+    # return response
+    return(response)
+
+# a function defined to run alation shell "alation_conf" command
+def alationConfQuery(configVal):
+    # define command
+    cmd = '''sudo chroot "/opt/alation/alation" /bin/su - alationadmin -c "alation_conf {}"'''.format(configVal)
+    response = bashCMD(cmd)
+    # parse out the response
+    key,val = response.replace('\n','').split('=')
+    key,val = key.strip(),val.strip()
+    # return response
+    return(key,val)
+
 # import libraries
 import subprocess
 import re
@@ -78,10 +98,9 @@ summary = []
 
 # ## Version information check
 # run the version check
-# run bash command
-output = subprocess.Popen(["cat /opt/alation/alation/opt/alation/django/main/alation_version.py"],stdout=subprocess.PIPE,shell=True)
-# process response
-response,val = output.communicate()
+# run bash command and get the response
+cmd = "cat /opt/alation/alation/opt/alation/django/main/alation_version.py"
+response = bashCMD(cmd)
 versionData = response.strip('\n').split('\n')
 
 # find Alation major version number
@@ -122,10 +141,9 @@ else:
 # ## Replication mode check
 # check replication
 # define commands
-commands = "curl -L --insecure http://localhost/monitor/replication/"
+cmd = "curl -L --insecure http://localhost/monitor/replication/"
 # get response
-process = subprocess.Popen('/bin/bash', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-response, err = process.communicate(commands)
+response = bashCMD(cmd)
 # process response
 replicationMode = response.split('{')[1].split('}')[0].split(': ')[1].replace('"','')
 
@@ -143,10 +161,10 @@ else:
 
 # ## Minimum space requirement check
 # check if a minimum of MINDISKSPACE GB space is free at /opt/alation/ by calling: df -h /opt/alation
-# run bash command
-output = subprocess.Popen(["df -BG /opt/alation"],stdout=subprocess.PIPE,shell=True)
-# get response
-response,val = output.communicate()
+# define command
+cmd = "df -BG /opt/alation"
+# run bash command and get response
+response = bashCMD(cmd)
 # get df readout
 installDfOutput = processDfOutput(response)
 # get remaining disk space
@@ -169,17 +187,17 @@ if usage >= WARNINGATDISKUSE:
 
 # ## Data drive and backup drive space and mounting check
 # data and backup mount check
-# run bash command for data drive
-output = subprocess.Popen(["df -BG $(cat /opt/alation/alation/.disk1_cache)"],stdout=subprocess.PIPE,shell=True)
-# get response
-dataResponse,val = output.communicate()
+# define bash command for data drive
+cmd = "df -BG $(cat /opt/alation/alation/.disk1_cache)"
+# run bash command and get response
+dataResponse = bashCMD(cmd)
 # get df readout
 dataDfOutput = processDfOutput(dataResponse)
 
-# run the bash command for backup drive
-output = subprocess.Popen(["df -BG $(cat /opt/alation/alation/.disk2_cache)"],stdout=subprocess.PIPE,shell=True)
-# get response
-backupResponse,val = output.communicate()
+# define bash command for backup drive
+cmd = "df -BG $(cat /opt/alation/alation/.disk2_cache)"
+# run bash command and get response
+backupResponse = bashCMD(cmd)
 # get df readout
 backupDfOutput = processDfOutput(backupResponse)
 
@@ -269,20 +287,20 @@ else:
 
 # ## CPU and memory info
 # extract CPU information
-# run the bash command to get CPU information
-output = subprocess.Popen(["lscpu"],stdout=subprocess.PIPE,shell=True)
+# define commands
+cmd = "lscpu"
 # get response
-cpuResponse,val = output.communicate()
+cpuResponse = bashCMD(cmd)
 # process response
 lscpuOutput = lscpuParser(cpuResponse)
 
 # get total memory information
-output = subprocess.Popen(["grep MemTotal /proc/meminfo"],stdout=subprocess.PIPE,shell=True)
+# define commands
+cmd = "grep MemTotal /proc/meminfo"
 # get response
-memResponse,val = output.communicate()
-# process output
+memResponse = bashCMD(cmd)
+# process response
 memResponse = lscpuParser(memResponse)
-
 
 # parse out version data collected before
 vDataTemp = list(map(lambda x: versionParser(x),versionData))
@@ -303,10 +321,10 @@ fullLog['totalMemory'] = memResponse.values()[0]
 
 # ## Mongo Check
 # mongoDB check
-commands = """cd $(cat /opt/alation/alation/.disk1_cache)
+cmd = """cd $(cat /opt/alation/alation/.disk1_cache)
 du -k --max-depth=0 -BG ./mongo"""
-process = subprocess.Popen('/bin/bash', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-response, err = process.communicate(commands)
+# get response
+response = bashCMD(cmd)
 
 # parase the response
 mongoSize = float(re.sub("\D", "", response.split('\t')[0]))
@@ -325,15 +343,9 @@ else:
     summary.append('MongoDB space check not passed: FAIL')
 
 
-# ## Datadog check
-# command to query alation_conf
-# this is pure gold
-command = '''sudo chroot "/opt/alation/alation" /bin/su - alationadmin -c "alation_conf datadog.enabled"'''
-process = subprocess.Popen('/bin/bash', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-response, err = process.communicate(command)
-# parse out the response
-key,val = response.replace('\n','').split('=')
-key,val = key.strip(),val.strip()
+# ## Query alation_conf for Datadog check, client_id, and site_id
+# Datadog check
+key,val = alationConfQuery('datadog.enabled')
 fullLog[key] = val
 
 if val == 'False':
@@ -342,13 +354,27 @@ if val == 'False':
 elif val == 'True':
     print("Datadog enabled: ".format(colGreen.format('OK')))
     datadogFlag = True
-
-# save log files
-with open("/tmp/dataOutput.json", "w") as f:
-    json.dump(fullLog,f)
     
+# client_id
+key,clientID = alationConfQuery('client_id')
+fullLog[key] = clientID
+# site_id
+key,siteID = alationConfQuery('site_id')
+fullLog[key] = clientID
+
+# write data to disk
+# data filename
+dfName = "/tmp/dataOutput_{}_{}.json".format(clientID,siteID)
+# write to disk
+with open(dfName, "w") as f:
+    json.dump(fullLog,f)
+
+# process the summary
 summaryStr = '\n'.join(summary)
-with open('/tmp/summary.txt','w') as f:
+# summary filename
+sfName = "/tmp/summary_{}_{}.txt".format(clientID,siteID)
+# write to disk
+with open(sfName,'w') as f:
     f.writelines(summaryStr)
     
 # create, share, and save a summary
