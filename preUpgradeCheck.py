@@ -84,6 +84,10 @@ MAXBACKUPAGE = 5
 MINBACKUPFACTOR = 1.5
 # mongoDB size requirements
 MONGOx = 2
+# postgreSQL multiplication factor for analytics
+# in order to turn on analytics, the pgsql folder will doulbe 
+# in size.
+PGSQLx = 2
 
 # create output templates
 # all clear = green
@@ -355,6 +359,27 @@ else:
     mongoFlag = False
     summary.append('MongoDB space check not passed: FAIL')
 
+
+# ## postgreSQL Check
+# postgreSQL check
+cmd = """cd $(cat /opt/alation/alation/.disk1_cache)
+sudo du -k --max-depth=0 -BG ./pgsql"""
+# get response
+response = bashCMD(cmd)
+
+# parase the response
+pgsqlSize = float(re.sub("\D", "", response.split('\t')[0]))
+fullLog['pgsqlSize'] = response.split('\t')[0]
+
+# run the check
+if availDataSpace/pgsqlSize > PGSQLx:
+    print('Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colGreen.format('OK')))
+    summary.append('postgreSQL for Analytics space check passed: OK')
+    pgsqlFlag = True
+else:
+    print('{} Not enough space available space to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colOrange.format('WARNING'),pgsqlSize,availDataSpace))
+    pgsqlFlag = False
+    summary.append('postgreSQL for Analytics space check not passed: FAIL')
 
 # ## Query alation_conf for Datadog check, client_id, and site_id
 # Datadog check
