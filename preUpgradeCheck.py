@@ -400,6 +400,8 @@ fullLog[key] = clientID
 key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
 
+# add current time
+fullLog['creationTime'] = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
 # write data to disk
 # data filename
