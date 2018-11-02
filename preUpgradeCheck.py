@@ -66,6 +66,7 @@ import re
 from os import listdir
 import csv
 import datetime
+import time
 import json
 
 
@@ -401,6 +402,7 @@ key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
 
 # add current time
+ts = time.time()
 fullLog['creationTime'] = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
 # write data to disk
