@@ -1,7 +1,7 @@
 
 <img src="logo-alation.png" width="500"  align="center"/>
 
-<p style="text-align: center;">Alation Upgrade Readiness Check</p>
+# Alation Upgrade Readiness Check
 
 ## This python script is designed to extract and analyze certain environmental variables to confirm that an Alation upgrade can proceed.
 
