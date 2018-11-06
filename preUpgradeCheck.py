@@ -402,7 +402,7 @@ fullSpaceNeeded = pgsqlSize*PGSQLx + mongoSize*MONGOx + MINDISKSPACE
 
 # check against available space
 if availDataSpace > fullSpaceNeeded:
-    print('Available space, {}GB, is greater than the combined space needed, {}GB: '.format(availDataSpace,fullSpaceNeeded,colPrint('OK!','G')))
+    print('Available space, {}GB, is greater than the combined space needed, {}GB: {}'.format(availDataSpace,fullSpaceNeeded,colPrint('OK!','G')))
     combinedSpaceFlag = True
 else:
     spaceDiff = abs(fullSpaceNeeded - availDataSpace)
