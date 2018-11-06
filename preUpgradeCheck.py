@@ -59,6 +59,20 @@ def alationConfQuery(configVal):
     key,val = key.strip(),val.strip()
     # return response
     return(key,val)
+    
+def colPrint(inStr,color):
+    # create output templates
+    if color == 'G':
+        # all clear = green
+        colPrintOut = '\x1b[6;30;42m' + '{}' + '\x1b[0m'.format(inStr)
+    elif color == 'R':
+        # warning = red
+        colPrintOut = '\x1b[6;30;41m' + '{}' + '\x1b[0m'.format(inStr)
+    elif color == 'O'
+        # caution = orange
+        colPrintOut = '\x1b[6;30;43m' + '{}' + '\x1b[0m'.format(inStr)
+        
+    return(colPrintOut)
 
 # import libraries
 import subprocess
@@ -90,13 +104,6 @@ MONGOx = 2
 # in size.
 PGSQLx = 2
 
-# create output templates
-# all clear = green
-colGreen = '\x1b[6;30;42m' + '{}!' + '\x1b[0m'
-# warning = red
-colRed = '\x1b[6;30;41m' + '{}!' + '\x1b[0m'
-# caution = orange
-colOrange = '\x1b[6;30;43m' + '{}!' + '\x1b[0m'
 # summary object for the end
 summary = []
 
@@ -123,11 +130,11 @@ version = str(majorVersion) + '.' + str(minorVersion) + '.' + str(patchVersion) 
     
 # check major version requirement
 if majorVersion >= CRITICALVERSION:
-    print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colGreen.format('OK'))
+    print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colPrint('OK!','G'))
     summary.append('Version ({}) check passed: OK'.format(version))
     versionFlag = True
 else:
-    print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colRed.format('FAIL'))
+    print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colPrint('FAIL!','R'))
     versionFlag = False
     summary.append('Version ({}) check failed: FAIL'.format(version))
 
@@ -135,7 +142,7 @@ else:
 if majorVersion <= 4:
     if minorVersion <= 10:
         flag410 = True
-        print('{} Be sure to follow 4.10.x or below version specific steps here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks'.format(colOrange.format('WARNING')))
+        print('{} Be sure to follow 4.10.x or below version specific steps here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks'.format(colPrint('WARNING!','O')))
         summary.append('Version ({}) is less than 4.10.x: WARNING'.format(version))
         
 else:
@@ -154,11 +161,11 @@ replicationMode = response.split('{')[1].split('}')[0].split(': ')[1].replace('"
 
 # check replication criteria
 if replicationMode == 'standalone':
-    print('Replication mode standalone: ' + colGreen.format('OK'))
+    print('Replication mode standalone: ' + colPrint('OK!','G'))
     summary.append('Replication mode is standalone: OK')
     replicationFlag = True
 else:
-    print(colRed.format('REPLICATION MODE NOT STANDALONE'))
+    print(colPrint('REPLICATION MODE NOT STANDALONE!','R'))
     replicationFlag = False
     summary.append('Replication mode is not standalone: WARNING')
     
@@ -176,18 +183,18 @@ installDfOutput = processDfOutput(response)
 availSize = float(re.sub("\D", "", installDfOutput['Available']))
 # check if there is at least MINDISKSPACE GB space available
 if availSize > MINDISKSPACE:
-    print('Minimum {}GB disk space (available = {}GB): '.format(MINDISKSPACE,availSize) + colGreen.format('OK'))
+    print('Minimum {}GB disk space (available = {}GB): '.format(MINDISKSPACE,availSize) + colPrint('OK!','G'))
     summary.append('Minimum space requirement met: OK')
     diskFlag = True
 else:
-    print('Minimum 10GB disk space (available = {}GB): '.format(availSize) + colRed.format('FAIL'))
+    print('Minimum 10GB disk space (available = {}GB): '.format(availSize) + colPrint('FAIL!','R'))
     diskFlag = False
     summary.append('Minimum space requirement not met: FAIL')
 
 # check if disk is at least 90% full
 usage = float(re.sub("\D", "", installDfOutput['Use%']))
 if usage >= WARNINGATDISKUSE:
-    print(colOrange.format('Caution! Disk is {}% full'.format(usage)))
+    print(colPrint('Caution! Disk is {}% full'.format(usage),'O'))
 
 
 # ## Data drive and backup drive space and mounting check
@@ -209,21 +216,21 @@ backupDfOutput = processDfOutput(backupResponse)
 # ensure the mounting points are different for data and backup
 if dataDfOutput['Mounted on'] != backupDfOutput['Mounted on']:
     mountFlag = True
-    print('Data and backup on different mount: {}'.format(colGreen.format('OK')))
+    print('Data and backup on different mount: {}'.format(colPrint('OK!','G')))
     summary.append('Data and backup on different mounts: OK')
 else:
-    print('Data and backup on different mount: {}'.format(colRed.format('FAIL')))
+    print('Data and backup on different mount: {}'.format(colPrint('FAIL!','R')))
     summary.append('Data and backup NOT on different mounts: FAIL')
     mountFlag = False
 
 # ensure the storage devices are different for data and backup
 if dataDfOutput['Filesystem'] != backupDfOutput['Filesystem']:
     storageFlag = True
-    print('Data and backup on different device: {}'.format(colGreen.format('OK')))
+    print('Data and backup on different device: {}'.format(colPrint('OK!','G')))
     summary.append('Data and backup on different devices: OK')
 else:
     storageFlag = False
-    print('Data and backup on different device: {}'.format(colGreen.format('FAIL')))
+    print('Data and backup on different device: {}'.format(colPrint('FAIL!','R')))
     summary.append('Data and backup NOT on different devices: FAIL')
 
 # compare backup disk size and data disk size
@@ -231,10 +238,10 @@ backupToDataRatio = float(re.sub("\D", "", backupDfOutput['1G-blocks']))/float(r
 
 # check if backup disk is at least MINBACKUPFACTOR the size of data disk
 if backupToDataRatio >= MINBACKUPFACTOR:
-    print('Backup disk to data disk size ratio is at least {}: {}'.format(MINBACKUPFACTOR,colGreen.format('OK')))
+    print('Backup disk to data disk size ratio is at least {}: {}'.format(MINBACKUPFACTOR,colPrint('OK!','G')))
     summary.append('Backup disk space check passed: OK')
 else:
-    print('Backup disk to data disk size ratio is {} which is lower than reccommended {}: {}'.format(backupToDataRatio,MINBACKUPFACTOR,colOrange.format('WARNING')))
+    print('Backup disk to data disk size ratio is {} which is lower than reccommended {}: {}'.format(backupToDataRatio,MINBACKUPFACTOR,colPrint('WARNING','O')))
     summary.append('Backup disk space check not passed: WARNING')
 
 
@@ -283,22 +290,22 @@ fileSize = float(response.split(' ')[4].replace('M',''))
 
 # check if the backup filesize is at least 10 MB
 if fileSize <= 10:
-    print(colRed.format('Backup file size {} less than 10 MB'.format(fileSize)))
+    print(colPrint('Backup file size {} less than 10 MB'.format(fileSize),'R'))
 
 # get the newest backup
 newestBackup = diffRes[min(tDiff)].strftime('%Y-%m-%d')
 # check age of the backup
 if len(backupDates) >= 1:
     if min(tDiff) <= MAXBACKUPAGE:
-        print('Recent backup available (Last backup on: {}, filesize: {}MB): {}'.format(newestBackup,fileSize,colGreen.format('OK')))
+        print('Recent backup available (Last backup on: {}, filesize: {}MB): {}'.format(newestBackup,fileSize,colPrint('OK!','G')))
         summary.append('Backup check passed: OK')
         backupFlag = True
     else:
-        print('No recent backup available. (Last backup on: {}, age: {}): {}'.format(newestBackup,str(min(tDiff)),colRed.format('FAIL')))
+        print('No recent backup available. (Last backup on: {}, age: {}): {}'.format(newestBackup,str(min(tDiff)),colPrint('FAIL!','R')))
         backupFlag = False
         summary.append('Backup check NOT passed: FAIL')
 else:
-    print(colRed.format('WARNING! No backup found'))
+    print(colPrint('WARNING! No backup found!','R'))
     summary.append('No backups found: FAIL')
     backupFlag = False
 
@@ -352,11 +359,11 @@ fullLog['mongoSize'] = response.split('\t')[0]
 availDataSpace = float(re.sub("\D", "", fullLog['dataDirDf']['Available']))
 
 if availDataSpace/mongoSize > MONGOx:
-    print('Available space {}GB is at least {}x greater than mongoDB size {}GB: {}'.format(availDataSpace,MONGOx,mongoSize,colGreen.format('OK')))
+    print('Available space {}GB is at least {}x greater than mongoDB size {}GB: {}'.format(availDataSpace,MONGOx,mongoSize,colPrint('OK!','G')))
     summary.append('MongoDB space check passed: OK')
     mongoFlag = True
 else:
-    print('{} Not enough space available space to update to Alation V R2 or high! Mongo size = {}, available size = {}.'.format(colRed.format('FAIL'),mongoSize,availDataSpace))
+    print('{} Not enough space available space to update to Alation V R2 or high! Mongo size = {}, available size = {}.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
     mongoFlag = False
     summary.append('MongoDB space check not passed: FAIL')
 
@@ -374,13 +381,14 @@ fullLog['pgsqlSize'] = response.split('\t')[0]
 
 # run the check
 if availDataSpace/pgsqlSize > PGSQLx:
-    print('Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colGreen.format('OK')))
+    print('Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
     summary.append('postgreSQL for Analytics space check passed: OK')
     pgsqlFlag = True
 else:
-    print('{} Not enough space available space to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colOrange.format('WARNING'),pgsqlSize,availDataSpace))
+    print('{} Not enough space available space to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colPrint('WARNING','O'),pgsqlSize,availDataSpace))
     pgsqlFlag = False
     summary.append('postgreSQL for Analytics space check not passed: FAIL')
+
 
 # ## Query alation_conf for Datadog check, client_id, and site_id
 # Datadog check
@@ -388,10 +396,10 @@ key,val = alationConfQuery('datadog.enabled')
 fullLog[key] = val
 
 if val == 'False':
-    print("{} Datadog not enabled!".format(colOrange.format('WARNING')))
+    print("{} Datadog not enabled!".format(colPrint('WARNING','O')))
     datadogFlag = False
 elif val == 'True':
-    print("Datadog enabled: ".format(colGreen.format('OK')))
+    print("Datadog enabled: ".format(colPrint('OK!','G')))
     datadogFlag = True
     
 # client_id
@@ -400,6 +408,30 @@ fullLog[key] = clientID
 # site_id
 key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
+
+# ## Schema Equivalance Check
+# create bash command
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+cd /opt/alation/django/rosemeta/one_off_scripts/
+sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
+python schemaEquivalance.py"""
+
+# get response
+response = bashCMD(cmd)
+
+# obtain the check result
+res = int(response.split(',')[0].split(':')[1])
+
+# pass case
+if res == 0:
+    # print the success message
+    print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+    seFlag = True
+else:
+    # failure case
+    print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+    seFlag = False
+
 
 # add current time
 ts = time.time()
@@ -420,25 +452,31 @@ sfName = "/tmp/summary_{}_{}.txt".format(clientID,siteID)
 with open(sfName,'w') as f:
     f.writelines(summaryStr)
     
+
+# print our the full log
+print('##########')
+print(fullLog)
+print('##########')
+
 # create, share, and save a summary
 # everything worked
 if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag:
-    print(colGreen.format('All critical checks passed'))
+    print(colPrint('All critical checks passed.\nPlease copy and send all the output back to Alation!','G'))
     print('Upgrade Readiness Check complete.')
 # now enough storage
 elif not diskFlag:
-    print(colRed.format('Not enough empty space on /opt/alation'))
+    print(colPrint('Not enough empty space on /opt/alation!','R'))
 # backup processing failed
 elif not backupFlag:
-    print(colRed.format('Do not proceed with upgrade. Please check backup.'))
+    print(colPrint('Do not proceed with upgrade. Please check backup!','R'))
 # not enough mongo space
 elif not mongoFlag:
-    print(colOrange.format('Not enough space for mongoDB.'))
+    print(colPrint('Not enough space for mongoDB!','R'))
 elif not replicationFlag:
-    print(colOrange.format('Please follow the High-Availability install instructions here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks '))
+    print(colPrint('Please follow the High-Availability install instructions here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks','O'))
 elif flag410:
-    print(colOrange.format('Alation version is lower than 4.10.x. Please see https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks '))
+    print(colPrint('Alation version is lower than 4.10.x. Please see https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks','O'))
 elif not mountFlag or not storageFlag:
-    print(colOrange.format('Backup and data drives share same device'))
+    print(colPrint('Backup and data drives share same device!','O'))
 elif not versionFlag:
-    print(colRed.format('Please contact customer care. Version not supported'))
+    print(colPrint('Please contact customer care. Version not supported!','R'))
