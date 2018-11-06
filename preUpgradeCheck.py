@@ -437,10 +437,10 @@ python schemaEquivalance.py
 sudo rm schemaEquivalance.py"""
 
 # get response
-response = bashCMD(cmd)
+seResponse = bashCMD(cmd)
 
 # obtain the check result
-res = int(response.split(',')[0].split(':')[1])
+res = int(seResponse.split(',')[0].split(':')[1])
 
 # pass case
 if res == 0:
@@ -480,7 +480,7 @@ print('##########')
 
 # create, share, and save a summary
 # everything worked
-if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag:
+if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and seFlag:
     print(colPrint('All critical checks passed.\nPlease copy and send all the output back to Alation!','G'))
     print('Upgrade Readiness Check complete.')
 # now enough storage
@@ -500,3 +500,6 @@ elif not mountFlag or not storageFlag:
     print(colPrint('Backup and data drives share same device!','O'))
 elif not versionFlag:
     print(colPrint('Please contact customer care. Version not supported!','R'))
+elif not seFlag:
+    print(colPrint('Please contact customer care. Schema equivalence check failed!','R'))
+    print(seResponse)
