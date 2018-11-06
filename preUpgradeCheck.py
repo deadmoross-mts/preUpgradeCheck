@@ -111,7 +111,8 @@ summary = []
 # ## Version information check
 # run the version check
 # run bash command and get the response
-cmd = "cat /opt/alation/alation/opt/alation/django/main/alation_version.py"
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+cat /opt/alation/django/main/alation_version.py"""
 response = bashCMD(cmd)
 versionData = response.strip('\n').split('\n')
 
@@ -174,7 +175,8 @@ else:
 # ## Minimum space requirement check
 # check if a minimum of MINDISKSPACE GB space is free at /opt/alation/ by calling: df -h /opt/alation
 # define command
-cmd = "df -BG /opt/alation"
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+df -BG /"""
 # run bash command and get response
 response = bashCMD(cmd)
 # get df readout
@@ -200,14 +202,16 @@ if usage >= WARNINGATDISKUSE:
 # ## Data drive and backup drive space and mounting check
 # data and backup mount check
 # define bash command for data drive
-cmd = "df -BG $(cat /opt/alation/alation/.disk1_cache)"
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+df -BG /data1/"""
 # run bash command and get response
 dataResponse = bashCMD(cmd)
 # get df readout
 dataDfOutput = processDfOutput(dataResponse)
 
 # define bash command for backup drive
-cmd = "df -BG $(cat /opt/alation/alation/.disk2_cache)"
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+df -BG /data2/"""
 # run bash command and get response
 backupResponse = bashCMD(cmd)
 # get df readout
@@ -247,18 +251,24 @@ else:
 
 # ## Backup checks
 # confirm backups
-# get backup drive
-with open('/opt/alation/alation/.disk2_cache','r') as f:
-    loc = f.readline()
-
-loc = loc.replace('\n','')
-    
 # read in backup files
-backupFilesTemp = listdir(loc+'/backup')
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+ls -l --block-size=M /data2/backup/"""
+# run bash command and get response
+response = bashCMD(cmd)
+
+backupFilesTemp = response.split('\n')
 backupFiles = []
+fileDatMap = {}
 for each in backupFilesTemp:
     if "alation_backup.tar.gz" in each:
-        backupFiles.append(each)
+        # get date
+        dtTemp = each.split(' ')[-1]
+        # get filename
+        backupFiles.append(dtTemp)
+        # map filename to data
+        fileDatMap[dtTemp.split('_')[0][:8]] = each
+        
 
 # extract the date information
 backupDates = []
@@ -282,9 +292,7 @@ for each in backupDTs:
 # get the newest backup file
 newestBackup = diffRes[min(tDiff)].strftime('%Y%m%d')
 # get backup filesize information
-cmd = """ls -l --block-size=M {}""".format(loc+'/backup/*{}*'.format(newestBackup))
-# run bash command and get response
-response = bashCMD(cmd)
+response = fileDatMap[newestBackup]
 # process the response (fize size in MB)
 fileSize = float(response.split(' ')[4].replace('M',''))
 
@@ -346,8 +354,8 @@ fullLog['totalMemory'] = memResponse.values()[0]
 
 # ## Mongo Check
 # mongoDB check
-cmd = """cd $(cat /opt/alation/alation/.disk1_cache)
-du -k --max-depth=0 -BG ./mongo"""
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+du -k --max-depth=0 -BG /data1/mongo/"""
 # get response
 response = bashCMD(cmd)
 
@@ -370,8 +378,8 @@ else:
 
 # ## postgreSQL Check
 # postgreSQL check
-cmd = """cd $(cat /opt/alation/alation/.disk1_cache)
-sudo du -k --max-depth=0 -BG ./pgsql"""
+cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+du -k --max-depth=0 -BG /data1/pgsql/"""
 # get response
 response = bashCMD(cmd)
 
