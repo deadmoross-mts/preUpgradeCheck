@@ -397,6 +397,17 @@ else:
     pgsqlFlag = False
     summary.append('postgreSQL for Analytics space check not passed: FAIL')
 
+# ## combined space check
+fullSpaceNeeded = pgsqlSize*PGSQLx + mongoSize*MONGOx + MINDISKSPACE
+
+# check against available space
+if availDataSpace > fullSpaceNeeded:
+    print('Available space, {}GB, is greater than the combined space needed, {}GB: '.format(availDataSpace,fullSpaceNeeded,colPrint('OK!','G')))
+    combinedSpaceFlag = True
+else:
+    spaceDiff = abs(fullSpaceNeeded - availDataSpace)
+    print('{} Combined space check Please expand /opt/alation/ drive by {}GB before turning on analytics!'.format(colPrint('WARNING!','O'),spaceDiff))
+    combinedSpaceFlag = False
 
 # ## Query alation_conf for Datadog check, client_id, and site_id
 # Datadog check
@@ -422,7 +433,8 @@ fullLog[key] = clientID
 cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
 cd /opt/alation/django/rosemeta/one_off_scripts/
 sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
-python schemaEquivalance.py"""
+python schemaEquivalance.py
+sudo rm schemaEquivalance.py"""
 
 # get response
 response = bashCMD(cmd)
