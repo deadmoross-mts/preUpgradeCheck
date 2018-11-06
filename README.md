@@ -15,6 +15,7 @@
     6. MongoDB health check
     7. postgreSQL size check
     8. Datadog activation check
+    9. Schema Equivalence Check
 
 
 ## Instructions
@@ -29,14 +30,15 @@ Or directly download the code from GitHub:
 Run the python code as sudo: (outside the Alation shell)
 
     sudo python preUpgradeCheck.py 
-If the script ran without any errors, copy these files and send them to your CSM:
-
-    /tmp/summary_clientID_siteID.txt
-    /tmp/dataOutput_clientID_siteID.json
-Please email the above files to your customer success manager.
+If the script ran without any errors, copy the python output and email it to Alation CSM.
 
 ## Example of a run:
 
 <img src="example.png" width="800"  align="center"/>
 
 
+
+
+```python
+
+```
