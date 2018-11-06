@@ -439,7 +439,7 @@ fullLog['creationTime'] = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d
 
 # write data to disk
 # data filename
-dfName = "/tmp/dataOutput_{}_{}.json".format(clientID,siteID)
+dfName = "/tmp/dataOutput_{}.json".format(siteID)
 # write to disk
 with open(dfName, "w") as f:
     json.dump(fullLog,f)
@@ -447,7 +447,7 @@ with open(dfName, "w") as f:
 # process the summary
 summaryStr = '\n'.join(summary)
 # summary filename
-sfName = "/tmp/summary_{}_{}.txt".format(clientID,siteID)
+sfName = "/tmp/summary_{}.txt".format(siteID)
 # write to disk
 with open(sfName,'w') as f:
     f.writelines(summaryStr)
