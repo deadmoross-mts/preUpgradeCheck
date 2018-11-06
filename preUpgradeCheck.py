@@ -64,13 +64,13 @@ def colPrint(inStr,color):
     # create output templates
     if color == 'G':
         # all clear = green
-        colPrintOut = '\x1b[6;30;42m' + '{}' + '\x1b[0m'.format(inStr)
+        colPrintOut = '\x1b[6;30;42m' + '{}'.format(inStr) + '\x1b[0m'
     elif color == 'R':
         # warning = red
-        colPrintOut = '\x1b[6;30;41m' + '{}' + '\x1b[0m'.format(inStr)
-    elif color == 'O'
+        colPrintOut = '\x1b[6;30;41m' + '{}'.format(inStr) + '\x1b[0m'
+    elif color == 'O':
         # caution = orange
-        colPrintOut = '\x1b[6;30;43m' + '{}' + '\x1b[0m'.format(inStr)
+        colPrintOut = '\x1b[6;30;43m' + '{}'.format(inStr) + '\x1b[0m'
         
     return(colPrintOut)
 
