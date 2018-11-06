@@ -428,29 +428,52 @@ fullLog[key] = clientID
 key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
 
-# ## Schema Equivalance Check
-# create bash command
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-cd /opt/alation/django/rosemeta/one_off_scripts/
-sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
-python schemaEquivalance.py
-sudo rm schemaEquivalance.py"""
+try:
+    # ## Schema Equivalance Check
+    # create bash command
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    cd /opt/alation/django/rosemeta/one_off_scripts/
+    sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
+    python schemaEquivalance.py"""
 
-# get response
-seResponse = bashCMD(cmd)
+    # get response
+    seResponse = bashCMD(cmd)
 
-# obtain the check result
-res = int(seResponse.split(',')[0].split(':')[1])
+    # obtain the check result
+    res = int(seResponse.split(',')[0].split(':')[1])
 
-# pass case
-if res == 0:
-    # print the success message
-    print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
-    seFlag = True
-else:
-    # failure case
-    print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
-    seFlag = False
+    # pass case
+    if res == 0:
+        # print the success message
+        print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+        seFlag = True
+    else:
+        # failure case
+        print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+        seFlag = False
+except:
+    print(colPrint('Cannot curl code from GitHub. Tryin in offline mode.','O'))
+    # ## Schema Equivalance Check
+    # create bash command
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    cd /opt/alation/django/rosemeta/one_off_scripts/
+    python schemaEquivalance.py"""
+
+    # get response
+    seResponse = bashCMD(cmd)
+
+    # obtain the check result
+    res = int(seResponse.split(',')[0].split(':')[1])
+
+    # pass case
+    if res == 0:
+        # print the success message
+        print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+        seFlag = True
+    else:
+        # failure case
+        print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+        seFlag = False
 
 
 # add current time
