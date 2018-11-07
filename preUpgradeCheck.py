@@ -74,6 +74,91 @@ def colPrint(inStr,color):
         
     return(colPrintOut)
 
+schemaCheckCode = """# import libraries
+import bootstrap_rosemeta
+from object_synchronization.service.equivalence import EquivalenceSetMaterializer, SchemaEquivalenceMaterializer
+from rosemeta.models import SchemaEquivalence, Table
+from rosemeta.models import CustomFieldValue
+from logical_metadata.models.models_values import PickerFieldValueDiff
+from rosemeta.models.enums import CustomFieldType
+from django.db import connection
+
+# safe limit
+GROUP_SAFE_LIMIT = 100000
+
+def check_schema_equivalence(checkSummary):
+    schema_groups = SchemaEquivalence.objects.all().values_list('group_id', flat=True).distinct()
+    for schema_eq_group_id in schema_groups:
+        checkSummary.append("Processing schema equivalence group {}".format(schema_eq_group_id))
+        schema_ids = SchemaEquivalence.objects.filter(group_id=schema_eq_group_id).values_list('schema_id', flat=True)
+        table_groups = EquivalenceSetMaterializer._fetch_groups(Table._meta.db_table, 'schema_obj_id', schema_ids)
+        attr_groups = SchemaEquivalenceMaterializer._fetch_attr_groups(schema_ids)
+        checkSummary.append("Table equivalences groups: {}".format(len(table_groups)))
+        checkSummary.append("Column equivalences groups: {}".format(len(attr_groups)))
+        if len(table_groups) < GROUP_SAFE_LIMIT and len(attr_groups) < GROUP_SAFE_LIMIT:
+            checkSummary.append("Schema equivalence group {} is ok".format(schema_eq_group_id))
+        else:
+            checkSummary.append("CAN NOT UPGRADE BECAUSE OF SCHEMA EQUIVALENCE({}) HAS TOO MANY CHILDREN GROUPS".format(schema_eq_group_id))
+            return(False,checkSummary)
+ 
+    return (True,checkSummary)
+
+def check_picker_unicode(checkSummary):
+    cfv_qs = CustomFieldValue.objects.filter(
+        otype__in=['schema', 'data', 'table', 'attribute'],
+        field__field_type=CustomFieldType.PICKER).select_related('field')
+ 
+    try:
+        for cfv in cfv_qs:
+            PickerFieldValueDiff(new_value=cfv.value_text, op='migrate')
+    except Exception as e:
+        checkSummary.append(e.message)
+        checkSummary.append("CAN NOT UPGRADE DUE TO UNICODE VALUES PRESENT IN CUSTOM FIELD VALUE ({})".format(cfv.id))
+        return(False,checkSummary)
+    return(True,checkSummary)
+ 
+ 
+def check_custom_fields_duplicate(checkSummary):
+    sql = "SELECT oid, field_type, field_id, COUNT(*), array_agg(cfv.id " \\
+          "ORDER BY cfv" \\
+          ".id) cfv_ids FROM rosemeta_customfieldvalue cfv JOIN " \\
+          "rosemeta_customfield cf ON cf.id = cfv.field_id WHERE otype in " \\
+          "('table', 'schema', 'data', 'attribute') " \\
+          "AND field_type IN (1, 2, 4, 7) GROUP BY oid, " \\
+          "field_type, " \\
+          "field_id HAVING COUNT(*) > 1 ORDER BY 4 DESC;"
+ 
+    cursor = connection.cursor()
+    cursor.execute(sql)
+    res = cursor.fetchall()
+ 
+    if res:
+#        print "CAN NOT UPGRADE - DUPLICATE CUSTOM FIELD VALUE RECORDS FOUND"
+#        print res
+        return(False,checkSummary)
+    return(True,checkSummary)
+ 
+ 
+def run_all_checks(checkSummary):
+    r1,checkSummary = check_custom_fields_duplicate(checkSummary)
+    r2,checkSummary = check_picker_unicode(checkSummary)
+    r3,checkSummary = check_schema_equivalence(checkSummary)
+    if r1 and r2 and r3:
+        # ok to upgrade
+        print("flag:0,check1:{},check2:{},check3:{}".format(str(r1),str(r2),str(r3)))
+    else:
+        print("flag:1,check1:{},check2:{},check3:{}".format(str(r1),str(r2),str(r3)))
+        
+    summ = '|'.join(checkSummary)    
+    print("Schema Check Summary: {}".format(summ))
+
+checkSummary = []      
+run_all_checks(checkSummary)"""
+
+# write schema check code to the correct location
+with open('/opt/alation/alation/opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py','w') as f:
+    f.writelines(schemaCheckCode)
+
 # import libraries
 import subprocess
 import re
@@ -428,13 +513,12 @@ fullLog[key] = clientID
 key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
 
+# try to run the code which should have been created earlier
 try:
     # ## Schema Equivalance Check
     # create bash command
     cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-    cd /opt/alation/django/rosemeta/one_off_scripts/
-    sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
-    python schemaEquivalance.py"""
+    python /opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py"""
 
     # get response
     seResponse = bashCMD(cmd)
@@ -451,12 +535,15 @@ try:
         # failure case
         print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
         seFlag = False
+
+# if not, then try running curl
 except:
-    print(colPrint('Cannot curl code from GitHub. Tryin in offline mode.','O'))
+    print(colPrint('Cannot find schema equivalance check code created earlier. Tryin to curl code form GitHub.','O'))
     # ## Schema Equivalance Check
     # create bash command
     cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
     cd /opt/alation/django/rosemeta/one_off_scripts/
+    sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
     python schemaEquivalance.py"""
 
     # get response
