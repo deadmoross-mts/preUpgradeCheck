@@ -508,7 +508,7 @@ elif val == 'True':
 
 # site_id
 key,siteID = alationConfQuery('site_id')
-fullLog[key] = clientID
+fullLog[key] = siteID
 
 # try to run the code which should have been created earlier
 try:
