@@ -474,7 +474,7 @@ fullLog['pgsqlSize'] = response.split('\t')[0]
 
 # run the check
 if availDataSpace/pgsqlSize > PGSQLx:
-    print('Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
+    print('(For Alation Analytics) Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
     summary.append('postgreSQL for Analytics space check passed: OK')
     pgsqlFlag = True
 else:
@@ -483,7 +483,7 @@ else:
     summary.append('postgreSQL for Analytics space check not passed: FAIL')
 
 # ## combined space check
-fullSpaceNeeded = pgsqlSize*PGSQLx + mongoSize*MONGOx + MINDISKSPACE
+fullSpaceNeeded = pgsqlSize*PGSQLx + mongoSize*MONGOx
 
 # check against available space
 if availDataSpace > fullSpaceNeeded:
