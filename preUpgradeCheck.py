@@ -505,10 +505,7 @@ if val == 'False':
 elif val == 'True':
     print("Datadog enabled: ".format(colPrint('OK!','G')))
     datadogFlag = True
-    
-# client_id
-key,clientID = alationConfQuery('client_id')
-fullLog[key] = clientID
+
 # site_id
 key,siteID = alationConfQuery('site_id')
 fullLog[key] = clientID
