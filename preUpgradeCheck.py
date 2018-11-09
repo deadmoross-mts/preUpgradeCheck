@@ -545,7 +545,7 @@ def seCheck():
             print('Check Result: {}'.format(res))
             seFlag = False
             
-    return(seFlag)
+    return(seFlag,seResponse)
 
 
 # ## Configuration parameters
@@ -670,7 +670,7 @@ except:
 
 # ## Schema Equivalance Check
 try:
-    seFlag = seCheck()
+    seFlag,seResponse = seCheck()
 except:
     print(colPrint('WARNING! Could not perform schema equivalance check','R'))
 
