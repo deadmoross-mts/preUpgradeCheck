@@ -668,7 +668,7 @@ try:
 except:
     siteID = 'NA'
 
-# ## Schema Equivalance Check    
+# ## Schema Equivalance Check
 try:
     seFlag = seCheck()
 except:
@@ -714,7 +714,7 @@ elif not backupFlag:
 elif not mongoFlag:
     print(colPrint('Not enough space for mongoDB!','R'))
 elif not replicationFlag:
-    print(colPrint('Please follow the High-Availability install instructions here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks','O'))
+    print(colPrint('Please follow the High-Availability install instructions here: https://alationhelp.zendesk.com/hc/en-us/articles/115006108927-Upgrade-on-an-HA-Pair-Configuration-4-7-and-above-','O'))
 elif flag410:
     print(colPrint('Alation version is lower than 4.10.x. Please see https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks','O'))
 elif not mountFlag or not storageFlag:
