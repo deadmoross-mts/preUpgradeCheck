@@ -1,4 +1,13 @@
 # ## Libraries and functions
+# import libraries
+import subprocess
+import re
+from os import listdir
+import csv
+import datetime
+import time
+import json
+
 # function to parse lscpu command output
 def lscpuParser(response):
     response = re.sub(' +',' ',response)
@@ -26,17 +35,15 @@ def versionParser(config):
 # exactly one path
 def processDfOutput(response):
     # process response
+    response = response.replace('Mounted on','Mounted_on').replace('\n',' ')
     # remove extra spaces
-    labs,vals = re.sub(' +',' ',response).strip('\n').split('\n')
-    # convert string to list
-    labsTemp = labs.split(' ')
-    # process the last value
-    labsTemp[5] = labsTemp[5] + ' ' + labsTemp[6]
-    del(labsTemp[6])
-    # convert value string to list
-    vals = vals.split(' ')
+    temp = re.sub(' +',' ',response).split(' ')
+    # split the lists
+    labs = temp[0:6]
+    vals = temp[6:]
+
     # create a dictionary
-    dfOutput = dict(zip(labsTemp,vals))
+    dfOutput = dict(zip(labs,vals))
     
     return(dfOutput)
 
@@ -156,17 +163,389 @@ checkSummary = []
 run_all_checks(checkSummary)"""
 
 # write schema check code to the correct location
-with open('/opt/alation/alation/opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py','w') as f:
-    f.writelines(schemaCheckCode)
+try:
+    with open('/opt/alation/alation/opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py','w') as f:
+        f.writelines(schemaCheckCode)
+except:
+    pass
 
-# import libraries
-import subprocess
-import re
-from os import listdir
-import csv
-import datetime
-import time
-import json
+# ## Version information check
+def versionCheck(summary):
+    # run the version check
+    # run bash command and get the response
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    cat /opt/alation/django/main/alation_version.py"""
+    response = bashCMD(cmd)
+    versionData = response.strip('\n').split('\n')
+
+    # find Alation major version number
+    for each in versionData:
+        if "ALATION_MAJOR_VERSION" in each:
+            majorVersion = int(each.split(' = ')[1])
+        elif "ALATION_MINOR_VERSION" in each:
+            minorVersion = int(each.split(' = ')[1])
+        elif "ALATION_PATCH_VERSION" in each:
+            patchVersion = int(each.split(' = ')[1])
+        elif "ALATION_BUILD_VERSION" in each:
+            buildVersion = int(each.split(' = ')[1])
+
+    version = str(majorVersion) + '.' + str(minorVersion) + '.' + str(patchVersion) + '.' + str(buildVersion)
+    
+    # check major version requirement
+    if majorVersion >= CRITICALVERSION:
+        print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colPrint('OK!','G'))
+        summary.append('Version ({}) check passed: OK'.format(version))
+        versionFlag = True
+    else:
+        print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colPrint('FAIL!','R'))
+        versionFlag = False
+        summary.append('Version ({}) check failed: FAIL'.format(version))
+
+    # check additional version information
+    if majorVersion <= 4:
+        if minorVersion <= 10:
+            flag410 = True
+            print('{} Be sure to follow 4.10.x or below version specific steps here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks'.format(colPrint('WARNING!','O')))
+            summary.append('Version ({}) is less than 4.10.x: WARNING'.format(version))
+        
+    else:
+        summary.append('Version ({}) is greater than 4.10.x: OK'.format(version))
+        flag410 = False
+        
+    return(versionData,majorVersion,minorVersion,patchVersion,buildVersion,version,versionFlag,flag410,summary)
+
+# ## Replication mode check
+def replicationCheck(summary):
+    # check replication
+    # define commands
+    cmd = "curl -L --insecure http://localhost/monitor/replication/"
+    # get response
+    response = bashCMD(cmd)
+    # process response
+    replicationMode = response.split('{')[1].split('}')[0].split(': ')[1].replace('"','')
+
+    # check replication criteria
+    if replicationMode == 'standalone':
+        print('Replication mode standalone: ' + colPrint('OK!','G'))
+        summary.append('Replication mode is standalone: OK')
+        replicationFlag = True
+    else:
+        print(colPrint('REPLICATION MODE NOT STANDALONE!','R'))
+        replicationFlag = False
+        summary.append('Replication mode is not standalone: WARNING')
+    
+    return(summary,replicationMode,replicationFlag)
+    
+# ## Minimum space requirement check
+def minSpaceCheck(summary):
+    # check if a minimum of MINDISKSPACE GB space is free at /opt/alation/ by calling: df -h /opt/alation
+    # define command
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    df -BG /"""
+    # run bash command and get response
+    response = bashCMD(cmd)
+    # get df readout
+    installDfOutput = processDfOutput(response)
+    # get remaining disk space
+    availSize = float(re.sub("\D", "", installDfOutput['Available']))
+    # check if there is at least MINDISKSPACE GB space available
+    if availSize > MINDISKSPACE:
+        print('Minimum {}GB disk space (available = {}GB): '.format(MINDISKSPACE,availSize) + colPrint('OK!','G'))
+        summary.append('Minimum space requirement met: OK')
+        diskFlag = True
+    else:
+        print('Minimum 10GB disk space (available = {}GB): '.format(availSize) + colPrint('FAIL!','R'))
+        diskFlag = False
+        summary.append('Minimum space requirement not met: FAIL')
+
+    # check if disk is at least 90% full
+    usage = float(re.sub("\D", "", installDfOutput['Use%']))
+    if usage >= WARNINGATDISKUSE:
+        print(colPrint('Caution! Disk is {}% full'.format(usage),'O'))
+        
+    return(installDfOutput,availSize,summary,usage,diskFlag)
+    
+# ## Data drive and backup drive space and mounting check
+def dataAndBackupDriveCheck(summary):
+    # data and backup mount check
+    # define bash command for data drive
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    df -BG /data1/"""
+    # run bash command and get response
+    dataResponse = bashCMD(cmd)
+    # get df readout
+    dataDfOutput = processDfOutput(dataResponse)
+
+    # define bash command for backup drive
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    df -BG /data2/"""
+    # run bash command and get response
+    backupResponse = bashCMD(cmd)
+    # get df readout
+    backupDfOutput = processDfOutput(backupResponse)
+
+    # ensure the mounting points are different for data and backup
+    if dataDfOutput['Mounted_on'] != backupDfOutput['Mounted_on']:
+        mountFlag = True
+        print('Data and backup on different mount: {}'.format(colPrint('OK!','G')))
+        summary.append('Data and backup on different mounts: OK')
+    else:
+        print('Data and backup on different mount: {}'.format(colPrint('FAIL!','R')))
+        summary.append('Data and backup NOT on different mounts: FAIL')
+        mountFlag = False
+
+    # ensure the storage devices are different for data and backup
+    if dataDfOutput['Filesystem'] != backupDfOutput['Filesystem']:
+        storageFlag = True
+        print('Data and backup on different device: {}'.format(colPrint('OK!','G')))
+        summary.append('Data and backup on different devices: OK')
+    else:
+        storageFlag = False
+        print('Data and backup on different device: {}'.format(colPrint('FAIL!','R')))
+        summary.append('Data and backup NOT on different devices: FAIL')
+
+    # compare backup disk size and data disk size
+    backupToDataRatio = float(re.sub("\D", "", backupDfOutput['1G-blocks']))/float(re.sub("\D", "", dataDfOutput['1G-blocks']))
+
+    # check if backup disk is at least MINBACKUPFACTOR the size of data disk
+    if backupToDataRatio >= MINBACKUPFACTOR:
+        print('Backup disk to data disk size ratio is at least {}: {}'.format(MINBACKUPFACTOR,colPrint('OK!','G')))
+        summary.append('Backup disk space check passed: OK')
+    else:
+        print('Backup disk to data disk size ratio is {} which is lower than reccommended {}: {}'.format(backupToDataRatio,MINBACKUPFACTOR,colPrint('WARNING','O')))
+        summary.append('Backup disk space check not passed: WARNING')
+    
+    return(summary,backupToDataRatio,backupDfOutput,storageFlag,mountFlag,dataDfOutput)
+
+# ## Backup checks
+def confirmBackups(summary):
+    # confirm backups
+    # read in backup files
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    ls -l --block-size=M /data2/backup/"""
+    # run bash command and get response
+    response = bashCMD(cmd)
+
+    backupFilesTemp = response.split('\n')
+    backupFiles = []
+    fileDatMap = {}
+    for each in backupFilesTemp:
+        if "alation_backup.tar.gz" in each:
+            # get date
+            dtTemp = each.split(' ')[-1]
+            # get filename
+            backupFiles.append(dtTemp)
+            # map filename to data
+            fileDatMap[dtTemp.split('_')[0][:8]] = each
+        
+
+    # extract the date information
+    backupDates = []
+    backupDTs = []
+    for each in backupFiles:
+        temp = each.split('_')[0][:8]
+        backupDates.append(temp)
+        tempDt = datetime.datetime.strptime(temp,'%Y%m%d').date()
+        backupDTs.append(tempDt)
+
+    # compute age of backups
+    today = datetime.date.today()
+
+    tDiff = []
+    diffRes = {}
+    for each in backupDTs:
+        diff = int((today - each).days)
+        tDiff.append(diff)
+        diffRes[diff] = each
+
+    # get the newest backup file
+    newestBackup = diffRes[min(tDiff)].strftime('%Y%m%d')
+    # get backup filesize information
+    response = fileDatMap[newestBackup]
+    # process the response (fize size in MB)
+    fileSize = float(response.split(' ')[4].replace('M',''))
+
+    # check if the backup filesize is at least 10 MB
+    if fileSize <= 10:
+        print(colPrint('Backup file size {} less than 10 MB'.format(fileSize),'R'))
+
+    # get the newest backup
+    newestBackup = diffRes[min(tDiff)].strftime('%Y-%m-%d')
+    # check age of the backup
+    if len(backupDates) >= 1:
+        if min(tDiff) <= MAXBACKUPAGE:
+            print('Recent backup available (Last backup on: {}, filesize: {}MB): {}'.format(newestBackup,fileSize,colPrint('OK!','G')))
+            summary.append('Backup check passed: OK')
+            backupFlag = True
+        else:
+            print('No recent backup available. (Last backup on: {}, age: {}): {}'.format(newestBackup,str(min(tDiff)),colPrint('FAIL!','R')))
+            backupFlag = False
+            summary.append('Backup check NOT passed: FAIL')
+    else:
+        print(colPrint('WARNING! No backup found!','R'))
+        summary.append('No backups found: FAIL')
+        backupFlag = False
+        
+    return(summary,backupFlag,backupFiles)
+
+# ## CPU and memory info
+def cpuMemData(summary):
+    # extract CPU information
+    # define commands
+    cmd = "lscpu"
+    # get response
+    cpuResponse = bashCMD(cmd)
+    # process response
+    lscpuOutput = lscpuParser(cpuResponse)
+
+    # get total memory information
+    # define commands
+    cmd = "grep MemTotal /proc/meminfo"
+    # get response
+    memResponse = bashCMD(cmd)
+    # process response
+    memResponse = lscpuParser(memResponse)
+    
+    return(summary,memResponse,lscpuOutput)
+
+# ## Mongo Check
+def mongoCheck(summary,fullLog):
+    # mongoDB check
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    du -k --max-depth=0 -BG /data1/mongo/"""
+    # get response
+    response = bashCMD(cmd)
+
+    # parase the response
+    mongoSize = float(re.sub("\D", "", response.split('\t')[0]))
+    fullLog['mongoSize'] = response.split('\t')[0]
+
+    # check if available disk space is at least MONGOx the size of mongoDB
+    availDataSpace = float(re.sub("\D", "", fullLog['dataDirDf']['Available']))
+
+    if availDataSpace/mongoSize > MONGOx:
+        print('Available space {}GB is at least {}x greater than mongoDB size {}GB: {}'.format(availDataSpace,MONGOx,mongoSize,colPrint('OK!','G')))
+        summary.append('MongoDB space check passed: OK')
+        mongoFlag = True
+    else:
+        print('{} Not enough space available space to update to Alation V R2 or high! Mongo size = {}, available size = {}.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
+        mongoFlag = False
+        summary.append('MongoDB space check not passed: FAIL')
+    
+    return(summary,mongoFlag,fullLog,availDataSpace,mongoSize)
+    
+# ## postgreSQL Check
+def pgSQLCheck(summary,fullLog):
+    # postgreSQL check
+    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+    du -k --max-depth=0 -BG /data1/pgsql/"""
+    # get response
+    response = bashCMD(cmd)
+
+    # parase the response
+    pgsqlSize = float(re.sub("\D", "", response.split('\t')[0]))
+    fullLog['pgsqlSize'] = response.split('\t')[0]
+
+    # run the check
+    if availDataSpace/pgsqlSize > PGSQLx:
+        print('(For Alation Analytics) Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
+        summary.append('postgreSQL for Analytics space check passed: OK')
+        pgsqlFlag = True
+    else:
+        print('{} Not enough space available space to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colPrint('WARNING','O'),pgsqlSize,availDataSpace))
+        pgsqlFlag = False
+        summary.append('postgreSQL for Analytics space check not passed: FAIL')
+
+    # ## combined space check
+    fullSpaceNeeded = pgsqlSize*PGSQLx + mongoSize*MONGOx
+
+    # check against available space
+    if availDataSpace > fullSpaceNeeded:
+        print('Available space, {}GB, is greater than the combined space needed, {}GB: {}'.format(availDataSpace,fullSpaceNeeded,colPrint('OK!','G')))
+        combinedSpaceFlag = True
+    else:
+        spaceDiff = abs(fullSpaceNeeded - availDataSpace)
+        print('{} Combined space check Please expand /opt/alation/ drive by {}GB before turning on analytics!'.format(colPrint('WARNING!','O'),spaceDiff))
+        combinedSpaceFlag = False
+        
+    return(combinedSpaceFlag,pgsqlFlag,summary,fullLog)
+
+# ## datadog check
+def dataDogCheck(fullLog):
+    # Datadog check
+    key,val = alationConfQuery('datadog.enabled')
+    fullLog[key] = val
+
+    if val == 'False':
+        print("{} Datadog not enabled!".format(colPrint('WARNING','O')))
+        datadogFlag = False
+    elif val == 'True':
+        print("Datadog enabled: ".format(colPrint('OK!','G')))
+        datadogFlag = True
+        
+    return(fullLog,datadogFlag)
+    
+## # Extract site ID
+def siteIDExtract(fullLog):
+    # site_id
+    key,siteID = alationConfQuery('site_id')
+    fullLog[key] = siteID
+    
+    return(fullLog,siteID)
+    
+# ## Schema Equivalance Check
+def seCheck():
+    # try to run the code which should have been created earlier
+    try:
+        # create bash command
+        cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+        python /opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py"""
+
+        # get response
+        seResponse = bashCMD(cmd)
+
+        # obtain the check result
+        res = int(seResponse.split(',')[0].split(':')[1])
+
+        # pass case
+        if res == 0:
+            # print the success message
+            print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+            seFlag = True
+        else:
+            # failure case
+            print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+            print('Check Result: {}'.format(res))
+            seFlag = False
+
+    # if not, then try running curl
+    except:
+        print(colPrint('Cannot find schema equivalance check code created earlier. Tryin to curl code form GitHub.','O'))
+        # ## Schema Equivalance Check
+        # create bash command
+        cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
+        cd /opt/alation/django/rosemeta/one_off_scripts/
+        sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
+        python schemaEquivalance.py"""
+
+        # get response
+        seResponse = bashCMD(cmd)
+
+        # obtain the check result
+        res = int(seResponse.split(',')[0].split(':')[1])
+
+        # pass case
+        if res == 0:
+            # print the success message
+            print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+            seFlag = True
+        else:
+            # failure case
+            print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+            print('Check Result: {}'.format(res))
+            seFlag = False
+            
+    return(seFlag)
 
 
 # ## Configuration parameters
@@ -192,373 +571,108 @@ PGSQLx = 2
 # summary object for the end
 summary = []
 
+##################
+# Code start
+##################
 
 # ## Version information check
-# run the version check
-# run bash command and get the response
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-cat /opt/alation/django/main/alation_version.py"""
-response = bashCMD(cmd)
-versionData = response.strip('\n').split('\n')
-
-# find Alation major version number
-for each in versionData:
-    if "ALATION_MAJOR_VERSION" in each:
-        majorVersion = int(each.split(' = ')[1])
-    elif "ALATION_MINOR_VERSION" in each:
-        minorVersion = int(each.split(' = ')[1])
-    elif "ALATION_PATCH_VERSION" in each:
-        patchVersion = int(each.split(' = ')[1])
-    elif "ALATION_BUILD_VERSION" in each:
-        buildVersion = int(each.split(' = ')[1])
-
-version = str(majorVersion) + '.' + str(minorVersion) + '.' + str(patchVersion) + '.' + str(buildVersion)
-    
-# check major version requirement
-if majorVersion >= CRITICALVERSION:
-    print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colPrint('OK!','G'))
-    summary.append('Version ({}) check passed: OK'.format(version))
-    versionFlag = True
-else:
-    print('Version > {} (current version = {}): '.format(CRITICALVERSION,version) + colPrint('FAIL!','R'))
+try:
+    versionData,majorVersion,minorVersion,patchVersion,buildVersion,version,versionFlag,flag410,summary = versionCheck(summary)
+except:
     versionFlag = False
-    summary.append('Version ({}) check failed: FAIL'.format(version))
-
-# check additional version information
-if majorVersion <= 4:
-    if minorVersion <= 10:
-        flag410 = True
-        print('{} Be sure to follow 4.10.x or below version specific steps here: https://alationhelp.zendesk.com/hc/en-us/articles/360011041633-Release-Specific-Update-Pre-Checks'.format(colPrint('WARNING!','O')))
-        summary.append('Version ({}) is less than 4.10.x: WARNING'.format(version))
-        
-else:
-    summary.append('Version ({}) is greater than 4.10.x: OK'.format(version))
     flag410 = False
+    
+    print(colPrint('WARNING! Version check failed! Please make sure Alation version is > 4.10.x','R'))
 
 
 # ## Replication mode check
-# check replication
-# define commands
-cmd = "curl -L --insecure http://localhost/monitor/replication/"
-# get response
-response = bashCMD(cmd)
-# process response
-replicationMode = response.split('{')[1].split('}')[0].split(': ')[1].replace('"','')
-
-# check replication criteria
-if replicationMode == 'standalone':
-    print('Replication mode standalone: ' + colPrint('OK!','G'))
-    summary.append('Replication mode is standalone: OK')
-    replicationFlag = True
-else:
-    print(colPrint('REPLICATION MODE NOT STANDALONE!','R'))
+try:
+    summary,replicationMode,replicationFlag = replicationCheck(summary)
+except:
     replicationFlag = False
-    summary.append('Replication mode is not standalone: WARNING')
-    
+    print(colPrint('WARNING! Replication check failed! Please make sure the installation is standalone!','R'))
 
 
 # ## Minimum space requirement check
-# check if a minimum of MINDISKSPACE GB space is free at /opt/alation/ by calling: df -h /opt/alation
-# define command
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-df -BG /"""
-# run bash command and get response
-response = bashCMD(cmd)
-# get df readout
-installDfOutput = processDfOutput(response)
-# get remaining disk space
-availSize = float(re.sub("\D", "", installDfOutput['Available']))
-# check if there is at least MINDISKSPACE GB space available
-if availSize > MINDISKSPACE:
-    print('Minimum {}GB disk space (available = {}GB): '.format(MINDISKSPACE,availSize) + colPrint('OK!','G'))
-    summary.append('Minimum space requirement met: OK')
-    diskFlag = True
-else:
-    print('Minimum 10GB disk space (available = {}GB): '.format(availSize) + colPrint('FAIL!','R'))
+try:
+    installDfOutput,availSize,summary,usage,diskFlag = minSpaceCheck(summary)
+except:
     diskFlag = False
-    summary.append('Minimum space requirement not met: FAIL')
-
-# check if disk is at least 90% full
-usage = float(re.sub("\D", "", installDfOutput['Use%']))
-if usage >= WARNINGATDISKUSE:
-    print(colPrint('Caution! Disk is {}% full'.format(usage),'O'))
+    print(colPrint('WARNING! Minimum space check failed! Please make sure /opt/alation has 8GB free space.','R'))
 
 
 # ## Data drive and backup drive space and mounting check
-# data and backup mount check
-# define bash command for data drive
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-df -BG /data1/"""
-# run bash command and get response
-dataResponse = bashCMD(cmd)
-# get df readout
-dataDfOutput = processDfOutput(dataResponse)
-
-# define bash command for backup drive
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-df -BG /data2/"""
-# run bash command and get response
-backupResponse = bashCMD(cmd)
-# get df readout
-backupDfOutput = processDfOutput(backupResponse)
-
-# ensure the mounting points are different for data and backup
-if dataDfOutput['Mounted on'] != backupDfOutput['Mounted on']:
-    mountFlag = True
-    print('Data and backup on different mount: {}'.format(colPrint('OK!','G')))
-    summary.append('Data and backup on different mounts: OK')
-else:
-    print('Data and backup on different mount: {}'.format(colPrint('FAIL!','R')))
-    summary.append('Data and backup NOT on different mounts: FAIL')
-    mountFlag = False
-
-# ensure the storage devices are different for data and backup
-if dataDfOutput['Filesystem'] != backupDfOutput['Filesystem']:
-    storageFlag = True
-    print('Data and backup on different device: {}'.format(colPrint('OK!','G')))
-    summary.append('Data and backup on different devices: OK')
-else:
-    storageFlag = False
-    print('Data and backup on different device: {}'.format(colPrint('FAIL!','R')))
-    summary.append('Data and backup NOT on different devices: FAIL')
-
-# compare backup disk size and data disk size
-backupToDataRatio = float(re.sub("\D", "", backupDfOutput['1G-blocks']))/float(re.sub("\D", "", dataDfOutput['1G-blocks']))
-
-# check if backup disk is at least MINBACKUPFACTOR the size of data disk
-if backupToDataRatio >= MINBACKUPFACTOR:
-    print('Backup disk to data disk size ratio is at least {}: {}'.format(MINBACKUPFACTOR,colPrint('OK!','G')))
-    summary.append('Backup disk space check passed: OK')
-else:
-    print('Backup disk to data disk size ratio is {} which is lower than reccommended {}: {}'.format(backupToDataRatio,MINBACKUPFACTOR,colPrint('WARNING','O')))
-    summary.append('Backup disk space check not passed: WARNING')
+try:
+    summary,backupToDataRatio,backupDfOutput,storageFlag,mountFlag,dataDfOutput = dataAndBackupDriveCheck(summary)
+except:
+    storageFlag,mountFlag = False,False
+    print(colPrint('WARNING! Could not verify separation of data and backup disk!','R'))
 
 
 # ## Backup checks
-# confirm backups
-# read in backup files
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-ls -l --block-size=M /data2/backup/"""
-# run bash command and get response
-response = bashCMD(cmd)
-
-backupFilesTemp = response.split('\n')
-backupFiles = []
-fileDatMap = {}
-for each in backupFilesTemp:
-    if "alation_backup.tar.gz" in each:
-        # get date
-        dtTemp = each.split(' ')[-1]
-        # get filename
-        backupFiles.append(dtTemp)
-        # map filename to data
-        fileDatMap[dtTemp.split('_')[0][:8]] = each
-        
-
-# extract the date information
-backupDates = []
-backupDTs = []
-for each in backupFiles:
-    temp = each.split('_')[0][:8]
-    backupDates.append(temp)
-    tempDt = datetime.datetime.strptime(temp,'%Y%m%d').date()
-    backupDTs.append(tempDt)
-
-# compute age of backups
-today = datetime.date.today()
-
-tDiff = []
-diffRes = {}
-for each in backupDTs:
-    diff = int((today - each).days)
-    tDiff.append(diff)
-    diffRes[diff] = each
-
-# get the newest backup file
-newestBackup = diffRes[min(tDiff)].strftime('%Y%m%d')
-# get backup filesize information
-response = fileDatMap[newestBackup]
-# process the response (fize size in MB)
-fileSize = float(response.split(' ')[4].replace('M',''))
-
-# check if the backup filesize is at least 10 MB
-if fileSize <= 10:
-    print(colPrint('Backup file size {} less than 10 MB'.format(fileSize),'R'))
-
-# get the newest backup
-newestBackup = diffRes[min(tDiff)].strftime('%Y-%m-%d')
-# check age of the backup
-if len(backupDates) >= 1:
-    if min(tDiff) <= MAXBACKUPAGE:
-        print('Recent backup available (Last backup on: {}, filesize: {}MB): {}'.format(newestBackup,fileSize,colPrint('OK!','G')))
-        summary.append('Backup check passed: OK')
-        backupFlag = True
-    else:
-        print('No recent backup available. (Last backup on: {}, age: {}): {}'.format(newestBackup,str(min(tDiff)),colPrint('FAIL!','R')))
-        backupFlag = False
-        summary.append('Backup check NOT passed: FAIL')
-else:
-    print(colPrint('WARNING! No backup found!','R'))
-    summary.append('No backups found: FAIL')
-    backupFlag = False
+try:
+    summary,backupFlag,backupFiles = confirmBackups(summary)
+except:
+    print(colPrint('WARNING! Could not verify backups!','R'))
 
 
 # ## CPU and memory info
-# extract CPU information
-# define commands
-cmd = "lscpu"
-# get response
-cpuResponse = bashCMD(cmd)
-# process response
-lscpuOutput = lscpuParser(cpuResponse)
+try:
+    summary,memResponse,lscpuOutput = cpuMemData(summary)
+except:
+    print(colPrint('Could not obtain CPU and memory Information','O'))
 
-# get total memory information
-# define commands
-cmd = "grep MemTotal /proc/meminfo"
-# get response
-memResponse = bashCMD(cmd)
-# process response
-memResponse = lscpuParser(memResponse)
+try:
+    # parse out version data collected before
+    vDataTemp = list(map(lambda x: versionParser(x),versionData))
+    keys = list(map(lambda x: x[0],vDataTemp))
+    values = list(map(lambda x: x[1],vDataTemp))
+    fullLog = dict(zip(keys,values))
 
-# parse out version data collected before
-vDataTemp = list(map(lambda x: versionParser(x),versionData))
-keys = list(map(lambda x: x[0],vDataTemp))
-values = list(map(lambda x: x[1],vDataTemp))
-fullLog = dict(zip(keys,values))
-
-# add previously obtained data
-fullLog['backupFiles'] = backupFiles
-fullLog['Replication'] = replicationMode
-fullLog['installDirDf'] = installDfOutput
-fullLog['dataDirDf'] = dataDfOutput
-fullLog['backupDirDf'] = backupDfOutput
-fullLog['backupToDataRatio'] = backupToDataRatio
-fullLog['cpuData'] = lscpuOutput
-fullLog['totalMemory'] = memResponse.values()[0]
-
+    # add previously obtained data
+    fullLog['backupFiles'] = backupFiles
+    fullLog['Replication'] = replicationMode
+    fullLog['installDirDf'] = installDfOutput
+    fullLog['dataDirDf'] = dataDfOutput
+    fullLog['backupDirDf'] = backupDfOutput
+    fullLog['backupToDataRatio'] = backupToDataRatio
+    fullLog['cpuData'] = lscpuOutput
+    fullLog['totalMemory'] = memResponse.values()[0]
+except:
+    fullLog={}
 
 # ## Mongo Check
-# mongoDB check
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-du -k --max-depth=0 -BG /data1/mongo/"""
-# get response
-response = bashCMD(cmd)
-
-# parase the response
-mongoSize = float(re.sub("\D", "", response.split('\t')[0]))
-fullLog['mongoSize'] = response.split('\t')[0]
-
-# check if available disk space is at least MONGOx the size of mongoDB
-availDataSpace = float(re.sub("\D", "", fullLog['dataDirDf']['Available']))
-
-if availDataSpace/mongoSize > MONGOx:
-    print('Available space {}GB is at least {}x greater than mongoDB size {}GB: {}'.format(availDataSpace,MONGOx,mongoSize,colPrint('OK!','G')))
-    summary.append('MongoDB space check passed: OK')
-    mongoFlag = True
-else:
-    print('{} Not enough space available space to update to Alation V R2 or high! Mongo size = {}, available size = {}.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
+try:
+    summary,mongoFlag,fullLog,availDataSpace,mongoSize = mongoCheck(summary,fullLog)
+except:
     mongoFlag = False
-    summary.append('MongoDB space check not passed: FAIL')
-
+    print(colPrint('WARNING! Could not check disk space for MongoDB!','R'))
 
 # ## postgreSQL Check
-# postgreSQL check
-cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-du -k --max-depth=0 -BG /data1/pgsql/"""
-# get response
-response = bashCMD(cmd)
-
-# parase the response
-pgsqlSize = float(re.sub("\D", "", response.split('\t')[0]))
-fullLog['pgsqlSize'] = response.split('\t')[0]
-
-# run the check
-if availDataSpace/pgsqlSize > PGSQLx:
-    print('(For Alation Analytics) Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
-    summary.append('postgreSQL for Analytics space check passed: OK')
-    pgsqlFlag = True
-else:
-    print('{} Not enough space available space to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colPrint('WARNING','O'),pgsqlSize,availDataSpace))
-    pgsqlFlag = False
-    summary.append('postgreSQL for Analytics space check not passed: FAIL')
-
-# ## combined space check
-fullSpaceNeeded = pgsqlSize*PGSQLx + mongoSize*MONGOx
-
-# check against available space
-if availDataSpace > fullSpaceNeeded:
-    print('Available space, {}GB, is greater than the combined space needed, {}GB: {}'.format(availDataSpace,fullSpaceNeeded,colPrint('OK!','G')))
-    combinedSpaceFlag = True
-else:
-    spaceDiff = abs(fullSpaceNeeded - availDataSpace)
-    print('{} Combined space check Please expand /opt/alation/ drive by {}GB before turning on analytics!'.format(colPrint('WARNING!','O'),spaceDiff))
-    combinedSpaceFlag = False
-
-# ## Query alation_conf for Datadog check, client_id, and site_id
-# Datadog check
-key,val = alationConfQuery('datadog.enabled')
-fullLog[key] = val
-
-if val == 'False':
-    print("{} Datadog not enabled!".format(colPrint('WARNING','O')))
-    datadogFlag = False
-elif val == 'True':
-    print("Datadog enabled: ".format(colPrint('OK!','G')))
-    datadogFlag = True
-
-# site_id
-key,siteID = alationConfQuery('site_id')
-fullLog[key] = siteID
-
-# try to run the code which should have been created earlier
 try:
-    # ## Schema Equivalance Check
-    # create bash command
-    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-    python /opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py"""
-
-    # get response
-    seResponse = bashCMD(cmd)
-
-    # obtain the check result
-    res = int(seResponse.split(',')[0].split(':')[1])
-
-    # pass case
-    if res == 0:
-        # print the success message
-        print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
-        seFlag = True
-    else:
-        # failure case
-        print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
-        seFlag = False
-
-# if not, then try running curl
+    combinedSpaceFlag,pgsqlFlag,summary,fullLog = pgSQLCheck(summary,fullLog)
 except:
-    print(colPrint('Cannot find schema equivalance check code created earlier. Tryin to curl code form GitHub.','O'))
-    # ## Schema Equivalance Check
-    # create bash command
-    cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-    cd /opt/alation/django/rosemeta/one_off_scripts/
-    sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
-    python schemaEquivalance.py"""
+    combinedSpaceFlag,pgsqlFlag = False,False
+    print(colPrint('Caution! Could not verify the space requirements for Alation Analytics!','O'))
 
-    # get response
-    seResponse = bashCMD(cmd)
+# ## Query alation_conf for Datadog check and site_id
+try:
+    fullLog,datadogFlag = dataDogCheck(fullLog)
+except:
+    datadogFlag = False
+    print(colPrint('Datadog status could not be verified!','O'))
 
-    # obtain the check result
-    res = int(seResponse.split(',')[0].split(':')[1])
+## # Extract site ID
+try:
+    fullLog,siteID = siteIDExtract(fullLog)
+except:
+    siteID = 'NA'
 
-    # pass case
-    if res == 0:
-        # print the success message
-        print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
-        seFlag = True
-    else:
-        # failure case
-        print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
-        seFlag = False
-
+# ## Schema Equivalance Check    
+try:
+    seFlag = seCheck()
+except:
+    print(colPrint('WARNING! Could not perform schema equivalance check','R'))
 
 # add current time
 ts = time.time()
