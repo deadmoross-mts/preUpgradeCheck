@@ -428,7 +428,7 @@ def mongoCheck(summary,fullLog):
         summary.append('MongoDB space check passed: OK')
         mongoFlag = True
     else:
-        print('{} Not enough space available space to update to Alation V R2 or high! Mongo size = {}, available size = {}.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
+        print('{} Not enough space available space to update to Alation V R2 or higher! Mongo size = {}, available size = {}.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
         mongoFlag = False
         summary.append('MongoDB space check not passed: FAIL')
     
