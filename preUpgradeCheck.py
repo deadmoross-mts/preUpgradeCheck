@@ -494,7 +494,7 @@ def siteIDExtract(fullLog):
     return(fullLog,siteID)
     
 # ## Schema Equivalance Check
-def seCheck():
+def seCheck(summary):
     # try to run the code which should have been created earlier
     try:
         # create bash command
@@ -511,11 +511,13 @@ def seCheck():
         if res == 0:
             # print the success message
             print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+            summary.append('Schema Equivalance Check: OK')
             seFlag = True
         else:
             # failure case
             print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
             print('Check Result: {}'.format(res))
+            summary.append('Schema Equivalance Check: FAIL')
             seFlag = False
 
     # if not, then try running curl
@@ -538,14 +540,16 @@ def seCheck():
         if res == 0:
             # print the success message
             print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
+            summary.append('Schema Equivalance Check: OK')
             seFlag = True
         else:
             # failure case
             print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+            summary.append('Schema Equivalance Check: FAIL')
             print('Check Result: {}'.format(res))
             seFlag = False
             
-    return(seFlag,seResponse)
+    return(seFlag,seResponse,summary)
 
 
 # ## Configuration parameters
@@ -670,7 +674,7 @@ except:
 
 # ## Schema Equivalance Check
 try:
-    seFlag,seResponse = seCheck()
+    seFlag,seResponse,summary = seCheck(summary)
 except:
     print(colPrint('WARNING! Could not perform schema equivalance check','R'))
 
