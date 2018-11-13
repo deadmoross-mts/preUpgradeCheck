@@ -706,7 +706,7 @@ print('##########')
 
 # create, share, and save a summary
 # everything worked
-if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and seFlag:
+if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and seFlag and mongoFlag:
     print(colPrint('All critical checks passed.\nPlease copy and send all the output back to Alation!','G'))
     print('Upgrade Readiness Check complete.')
 # now enough storage
