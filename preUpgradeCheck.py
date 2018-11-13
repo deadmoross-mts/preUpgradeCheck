@@ -617,6 +617,7 @@ except:
 try:
     summary,backupFlag,backupFiles = confirmBackups(summary)
 except:
+    backupFlag = False
     print(colPrint('WARNING! Could not verify backups!','R'))
 
 
