@@ -158,7 +158,7 @@ def run_all_checks(checkSummary):
     else:
         print("flag:1,check1:{},check2:{},check3:{}".format(str(r1),str(r2),str(r3)))
         
-    summ = '|'.join(checkSummary)    
+    summ = '\\n'.join(checkSummary)    
     print("Schema Check Summary: {}".format(summ))
 
 checkSummary = []      
@@ -498,9 +498,9 @@ def siteIDExtract(fullLog):
 # ## Engineering Checks
 def seCheck(summary):
     # error dictionary
-    ed = {1:'Schema Equivelance Check Failed',
+    ed = {3:'Schema Equivelance Check Failed',
 2:'LMS Migration Check Failed',
-3:'Custom Field Check Failed'}
+1:'Custom Field Check Failed'}
     # try to run the code which should have been created earlier
     try:
         # create bash command
@@ -551,8 +551,8 @@ def seCheck(summary):
         # pass case
         if res == 0:
             # print the success message
-            print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
-            summary.append('Schema Equivalance Check: OK')
+            print("Engineering Checks: {}".format(colPrint('OK!','G')))
+            summary.append('Engineering Checks Check: OK')
             seFlag = True
         else:
             # failure case
@@ -692,6 +692,7 @@ except:
 
 # ## Engineering Check
 try:
+    print('Running Engineering Checks. Please wait!')
     seFlag,seResponse,summary = seCheck(summary)
 except:
     print(colPrint('WARNING! Could not perform engineering checks','R'))
