@@ -81,7 +81,7 @@ def colPrint(inStr,color):
         
     return(colPrintOut)
 
-schemaCheckCode = """# import libraries
+engCheckCode = """# import libraries
 import bootstrap_rosemeta
 from object_synchronization.service.equivalence import EquivalenceSetMaterializer, SchemaEquivalenceMaterializer
 from rosemeta.models import SchemaEquivalence, Table
@@ -93,6 +93,7 @@ from django.db import connection
 # safe limit
 GROUP_SAFE_LIMIT = 100000
 
+# Schema Equivalence check: This is the only function for it
 def check_schema_equivalence(checkSummary):
     schema_groups = SchemaEquivalence.objects.all().values_list('group_id', flat=True).distinct()
     for schema_eq_group_id in schema_groups:
@@ -110,6 +111,7 @@ def check_schema_equivalence(checkSummary):
  
     return (True,checkSummary)
 
+# LMS Migration Check
 def check_picker_unicode(checkSummary):
     cfv_qs = CustomFieldValue.objects.filter(
         otype__in=['schema', 'data', 'table', 'attribute'],
@@ -124,7 +126,7 @@ def check_picker_unicode(checkSummary):
         return(False,checkSummary)
     return(True,checkSummary)
  
- 
+# Duplicate custom field check 
 def check_custom_fields_duplicate(checkSummary):
     sql = "SELECT oid, field_type, field_id, COUNT(*), array_agg(cfv.id " \\
           "ORDER BY cfv" \\
@@ -162,10 +164,10 @@ def run_all_checks(checkSummary):
 checkSummary = []      
 run_all_checks(checkSummary)"""
 
-# write schema check code to the correct location
+# write engineering check code to the correct location
 try:
-    with open('/opt/alation/alation/opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py','w') as f:
-        f.writelines(schemaCheckCode)
+    with open('/opt/alation/alation/opt/alation/django/rosemeta/one_off_scripts/engineeringChecks.py','w') as f:
+        f.writelines(engCheckCode)
 except:
     pass
 
@@ -493,13 +495,17 @@ def siteIDExtract(fullLog):
     
     return(fullLog,siteID)
     
-# ## Schema Equivalance Check
+# ## Engineering Checks
 def seCheck(summary):
+    # error dictionary
+    ed = {1:'Schema Equivelance Check Failed',
+2:'LMS Migration Check Failed',
+3:'Custom Field Check Failed'}
     # try to run the code which should have been created earlier
     try:
         # create bash command
         cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-        python /opt/alation/django/rosemeta/one_off_scripts/schemaEquivalance.py"""
+        python /opt/alation/django/rosemeta/one_off_scripts/engineeringChecks.py"""
 
         # get response
         seResponse = bashCMD(cmd)
@@ -510,25 +516,31 @@ def seCheck(summary):
         # pass case
         if res == 0:
             # print the success message
-            print("Schema Equivalance Check: {}".format(colPrint('OK!','G')))
-            summary.append('Schema Equivalance Check: OK')
+            print("Engineering Checks: {}".format(colPrint('OK!','G')))
+            summary.append('Engineering Check: OK')
             seFlag = True
         else:
             # failure case
-            print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
+            print('Engineering Check: {}'.format(colPrint('FAIL!','R')))
             print('Check Result: {}'.format(res))
-            summary.append('Schema Equivalance Check: FAIL')
+            summary.append('Engineering Check: FAIL')
             seFlag = False
+            checks = seResponse.split('\n')[0].split(',')[1:]
+            for each in checks:
+                if 'False' in each:
+                    checkNum = int(each.split(':')[0].replace('check',''))
+                    print(ed[checkNum])
+                    
 
     # if not, then try running curl
     except:
-        print(colPrint('Cannot find schema equivalance check code created earlier. Tryin to curl code form GitHub.','O'))
-        # ## Schema Equivalance Check
+        print(colPrint('Cannot find engineering check code created earlier. Tryin to curl code form GitHub.','O'))
+        # ## Engineering Check
         # create bash command
         cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
         cd /opt/alation/django/rosemeta/one_off_scripts/
-        sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/schemaEquivalence/master/schemaEquivalance.py --output schemaEquivalance.py
-        python schemaEquivalance.py"""
+        sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/preUpgradeCheck/master/engineeringChecks.py --output engineeringChecks.py
+        python engineeringChecks.py"""
 
         # get response
         seResponse = bashCMD(cmd)
@@ -544,10 +556,15 @@ def seCheck(summary):
             seFlag = True
         else:
             # failure case
-            print('Schema Equivalance Check: {}'.format(colPrint('FAIL!','R')))
-            summary.append('Schema Equivalance Check: FAIL')
+            print('Engineering Check: {}'.format(colPrint('FAIL!','R')))
             print('Check Result: {}'.format(res))
+            summary.append('Engineering Check: FAIL')
             seFlag = False
+            checks = seResponse.split('\n')[0].split(',')[1:]
+            for each in checks:
+                if 'False' in each:
+                    checkNum = int(each.split(':')[0].replace('check',''))
+                    print(ed[checkNum])
             
     return(seFlag,seResponse,summary)
 
@@ -673,11 +690,11 @@ try:
 except:
     siteID = 'NA'
 
-# ## Schema Equivalance Check
+# ## Engineering Check
 try:
     seFlag,seResponse,summary = seCheck(summary)
 except:
-    print(colPrint('WARNING! Could not perform schema equivalance check','R'))
+    print(colPrint('WARNING! Could not perform engineering checks','R'))
 
 # add current time
 ts = time.time()
