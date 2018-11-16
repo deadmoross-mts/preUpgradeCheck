@@ -83,7 +83,7 @@ def run_all_checks(checkSummary):
     else:
         print("flag:1,check1:{},check2:{},check3:{}".format(str(r1),str(r2),str(r3)))
         
-    summ = '|'.join(checkSummary)    
+    summ = '\\n'.join(checkSummary)    
     print("Schema Check Summary: {}".format(summ))
 
 checkSummary = []      
