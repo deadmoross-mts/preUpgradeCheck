@@ -111,58 +111,13 @@ def check_schema_equivalence(checkSummary):
  
     return (True,checkSummary)
 
-# LMS Migration Check
-def check_picker_unicode(checkSummary):
-    cfv_qs = CustomFieldValue.objects.filter(
-        otype__in=['schema', 'data', 'table', 'attribute'],
-        field__field_type=CustomFieldType.PICKER).select_related('field')
- 
-    try:
-        for cfv in cfv_qs:
-            PickerFieldValueDiff(new_value=cfv.value_text, op='migrate')
-    except Exception as e:
-        checkSummary.append(e.message)
-        checkSummary.append("CAN NOT UPGRADE DUE TO UNICODE VALUES PRESENT IN CUSTOM FIELD VALUE ({})".format(cfv.id))
-        return(False,checkSummary)
-    return(True,checkSummary)
- 
-# Duplicate custom field check 
-def check_custom_fields_duplicate(checkSummary):
-    sql = "SELECT oid, field_type, field_id, COUNT(*), array_agg(cfv.id " \\
-          "ORDER BY cfv" \\
-          ".id) cfv_ids FROM rosemeta_customfieldvalue cfv JOIN " \\
-          "rosemeta_customfield cf ON cf.id = cfv.field_id WHERE otype in " \\
-          "('table', 'schema', 'data', 'attribute') " \\
-          "AND field_type IN (1, 2, 4, 7) GROUP BY oid, " \\
-          "field_type, " \\
-          "field_id HAVING COUNT(*) > 1 ORDER BY 4 DESC;"
- 
-    cursor = connection.cursor()
-    cursor.execute(sql)
-    res = cursor.fetchall()
- 
-    if res:
-#        print "CAN NOT UPGRADE - DUPLICATE CUSTOM FIELD VALUE RECORDS FOUND"
-#        print res
-        return(False,checkSummary)
-    return(True,checkSummary)
- 
- 
-def run_all_checks(checkSummary):
-    r1,checkSummary = check_custom_fields_duplicate(checkSummary)
-    r2,checkSummary = check_picker_unicode(checkSummary)
-    r3,checkSummary = check_schema_equivalence(checkSummary)
-    if r1 and r2 and r3:
-        # ok to upgrade
-        print("flag:0,check1:{},check2:{},check3:{}".format(str(r1),str(r2),str(r3)))
-    else:
-        print("flag:1,check1:{},check2:{},check3:{}".format(str(r1),str(r2),str(r3)))
-        
-    summ = '\\n'.join(checkSummary)    
-    print("Schema Check Summary: {}".format(summ))
-
 checkSummary = []      
-run_all_checks(checkSummary)"""
+checkRes,checkSummary = check_schema_equivalence(checkSummary)
+
+if checkRes:
+     print("flag:0")
+ else:
+     print("flag:1")"""
 
 # write engineering check code to the correct location
 try:
@@ -497,10 +452,6 @@ def siteIDExtract(fullLog):
     
 # ## Engineering Checks
 def seCheck(summary):
-    # error dictionary
-    ed = {3:'Schema Equivelance Check Failed',
-2:'LMS Migration Check Failed',
-1:'Custom Field Check Failed'}
     # try to run the code which should have been created earlier
     try:
         # create bash command
@@ -516,20 +467,15 @@ def seCheck(summary):
         # pass case
         if res == 0:
             # print the success message
-            print("Engineering Checks: {}".format(colPrint('OK!','G')))
-            summary.append('Engineering Check: OK')
+            print("Schema Equivelance Check: {}".format(colPrint('OK!','G')))
+            summary.append('Schema Equivelance Check: OK')
             seFlag = True
         else:
             # failure case
-            print('Engineering Check: {}'.format(colPrint('FAIL!','R')))
+            print('Schema Equivelance Check: {}'.format(colPrint('FAIL!','R')))
             print('Check Result: {}'.format(res))
-            summary.append('Engineering Check: FAIL')
+            summary.append('Schema Equivelance Check: FAIL')
             seFlag = False
-            checks = seResponse.split('\n')[0].split(',')[1:]
-            for each in checks:
-                if 'False' in each:
-                    checkNum = int(each.split(':')[0].replace('check',''))
-                    print(ed[checkNum])
                     
 
     # if not, then try running curl
@@ -551,23 +497,61 @@ def seCheck(summary):
         # pass case
         if res == 0:
             # print the success message
-            print("Engineering Checks: {}".format(colPrint('OK!','G')))
-            summary.append('Engineering Checks Check: OK')
+            print("Schema Equivelance Check: {}".format(colPrint('OK!','G')))
+            summary.append('Schema Equivelance Check: OK')
             seFlag = True
         else:
             # failure case
-            print('Engineering Check: {}'.format(colPrint('FAIL!','R')))
+            print('Schema Equivelance Check: {}'.format(colPrint('FAIL!','R')))
             print('Check Result: {}'.format(res))
-            summary.append('Engineering Check: FAIL')
+            summary.append('Schema Equivelance Check: FAIL')
             seFlag = False
-            checks = seResponse.split('\n')[0].split(',')[1:]
-            for each in checks:
-                if 'False' in each:
-                    checkNum = int(each.split(':')[0].replace('check',''))
-                    print(ed[checkNum])
             
     return(seFlag,seResponse,summary)
 
+# parse out the information 
+def fileParser(inMessage):
+    if len(inMessage) > 1 and ':' in inMessage:
+        # split out the directory name and response
+        k,v = inMessage.split(':')
+        k = k.strip()
+        v = v.strip()
+        # return values
+        return(k,v)
+    else:
+        return(False,False)
+
+# ## Symbolic Link Check
+def slCheck():
+    # output dict
+    slFullRes = {}
+    # create bash command
+    cmd = "file /opt && file /opt/alation"
+    # get response
+    slResponse = bashCMD(cmd)
+    # parse out all the responses
+    resList = slResponse.split('\n')
+    # split out each message
+    for res in resList:
+        # get the inputs
+        k,v = fileParser(res)
+        if k and v:
+            # add to result dataset
+            slFullRes[k] = v
+    
+    # check information for /opt
+    optRes = slFullRes.get('/opt',False)
+    # check if result came back
+    if optRes:
+        # check if the result is the expected result
+        if optRes == "directory":
+            print('/opt is not a symbolic link: '.format(colPrint('OK!','G')))
+            optSLFlag = True
+        else:
+            print('/opt is a symbolic link: '.format(colPrint('FAIL!','R')))
+            optSLFlag = False
+    
+    # parse the incoming information
 
 # ## Configuration parameters
 # config
