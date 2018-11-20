@@ -521,6 +521,23 @@ def fileParser(inMessage):
     else:
         return(False,False)
 
+def slLogic(dirToCheck,slFullRes):
+    # check information for dirToCheck
+    res = slFullRes.get(dirToCheck,False)
+    # check if result came back
+    if res:
+        # check if the result is the expected result
+        if res == "directory":
+            print('{} is not a symbolic link: {}'.format(dirToCheck,colPrint('OK!','G')))
+            return(True)
+        else:
+            print('{} is a symbolic link: {}'.format(dirToCheck,colPrint('FAIL!','R')))
+            return(False)
+    # if the result did not come back
+    else:
+        print('Cannot verify if {} is a symbolic link: {}'.format(dirToCheck,colPrint('FAIL!','R')))
+        return(False)
+
 # ## Symbolic Link Check
 def slCheck():
     # output dict
@@ -540,18 +557,11 @@ def slCheck():
             slFullRes[k] = v
     
     # check information for /opt
-    optRes = slFullRes.get('/opt',False)
-    # check if result came back
-    if optRes:
-        # check if the result is the expected result
-        if optRes == "directory":
-            print('/opt is not a symbolic link: '.format(colPrint('OK!','G')))
-            optSLFlag = True
-        else:
-            print('/opt is a symbolic link: '.format(colPrint('FAIL!','R')))
-            optSLFlag = False
+    optFlag = slLogic('/opt',slFullRes)
+    # check information for /opt/alation
+    optAlationFlag = slLogic('/opt/alation',slFullRes)
     
-    # parse the incoming information
+    return(optFlag,optAlationFlag)
 
 # ## Configuration parameters
 # config
@@ -682,6 +692,14 @@ except:
     print(colPrint('WARNING! Could not perform engineering checks','R'))
     seFlag = False
 
+# ## Symbolic Link Check
+# we need to check if /opt and /opt/alation/ is a symbolic link or not
+try:
+    optFlag,optAlationFlag = slCheck()
+except:
+    print('Could not if verify /opt and /opt/alation/ are symbolic link(s) or not! {}'.format(colPrint('WARNING!','O')))
+    optFlag,optAlationFlag = False,False
+
 # add current time
 ts = time.time()
 fullLog['creationTime'] = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
@@ -709,7 +727,7 @@ print('##########')
 
 # create, share, and save a summary
 # everything worked
-if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and seFlag and mongoFlag:
+if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and seFlag and mongoFlag and optFlag and optAlationFlag:
     print(colPrint('All critical checks passed.\nPlease copy and send all the output back to Alation!','G'))
     print('Upgrade Readiness Check complete.')
 # now enough storage
