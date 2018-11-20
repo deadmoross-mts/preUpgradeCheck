@@ -32,6 +32,6 @@ checkSummary = []
 checkRes,checkSummary = check_schema_equivalence(checkSummary)
 
 if checkRes:
-     print("flag:0")
- else:
-     print("flag:1")
+    print("flag:0")
+else:
+    print("flag:1")

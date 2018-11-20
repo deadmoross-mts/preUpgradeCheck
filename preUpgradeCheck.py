@@ -116,7 +116,7 @@ checkRes,checkSummary = check_schema_equivalence(checkSummary)
 
 if checkRes:
      print("flag:0")
- else:
+else:
      print("flag:1")"""
 
 # write engineering check code to the correct location
@@ -680,6 +680,7 @@ try:
     seFlag,seResponse,summary = seCheck(summary)
 except:
     print(colPrint('WARNING! Could not perform engineering checks','R'))
+    seFlag = False
 
 # add current time
 ts = time.time()
