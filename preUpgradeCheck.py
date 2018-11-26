@@ -568,10 +568,16 @@ def linuxVersionInfo():
     # create the command
     cmd = 'cat /proc/version'
     # run and get response
-    vResponse = bashCMD(cmd)
-    # process the response
-    vResponse = vResponse.strip()
+    vResponse = bashCMD(cmd).strip()
     return(vResponse)
+    
+# ## Get previously installed Alation versions
+def alationVerHist():
+    # create the command
+    cmd = 'update-alternatives --display alation'
+    # run and get response
+    avResponse = bashCMD(cmd).strip().replace('\n','|')
+    return(avResponse)
 
 # ## Configuration parameters
 # config
@@ -652,6 +658,13 @@ try:
     vResponse = linuxVersionInfo()
 except:
     print(colPrint('Could not obtain Linux version information','O'))
+
+# ## get Alation version history
+try:
+    avResponse = alationVerHist()
+except:
+    print(colPrint('Could not obtain Alation version history','O'))
+
 try:
     # parse out version data collected before
     vDataTemp = list(map(lambda x: versionParser(x),versionData))
@@ -694,6 +707,10 @@ try:
         pass
     try:
         fullLog['linuxVersion'] = vResponse
+    except:
+        pass
+    try:
+        fullLog['alationVerHist'] = avResponse
     except:
         pass
 except:
