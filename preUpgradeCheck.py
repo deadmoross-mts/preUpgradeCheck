@@ -563,6 +563,16 @@ def slCheck():
     
     return(optFlag,optAlationFlag)
 
+# ## get version information
+def linuxVersionInfo():
+    # create the command
+    cmd = 'cat /proc/version'
+    # run and get response
+    vResponse = bashCMD(cmd)
+    # process the response
+    vResponse = vResponse.strip()
+    return(vResponse)
+
 # ## Configuration parameters
 # config
 # minimum empty disk requirement
@@ -636,7 +646,12 @@ try:
     summary,memResponse,lscpuOutput = cpuMemData(summary)
 except:
     print(colPrint('Could not obtain CPU and memory Information','O'))
-
+    
+# ## get linux version information
+try:
+    vResponse = linuxVersionInfo()
+except:
+    print(colPrint('Could not obtain Linux version information','O'))
 try:
     # parse out version data collected before
     vDataTemp = list(map(lambda x: versionParser(x),versionData))
@@ -645,14 +660,42 @@ try:
     fullLog = dict(zip(keys,values))
 
     # add previously obtained data
-    fullLog['backupFiles'] = backupFiles
-    fullLog['Replication'] = replicationMode
-    fullLog['installDirDf'] = installDfOutput
-    fullLog['dataDirDf'] = dataDfOutput
-    fullLog['backupDirDf'] = backupDfOutput
-    fullLog['backupToDataRatio'] = backupToDataRatio
-    fullLog['cpuData'] = lscpuOutput
-    fullLog['totalMemory'] = memResponse.values()[0]
+    try:
+        fullLog['backupFiles'] = backupFiles
+    except:
+        pass
+    try:
+        fullLog['Replication'] = replicationMode
+    except:
+        pass
+    try:
+        fullLog['installDirDf'] = installDfOutput
+    except:
+        pass
+    try:
+        fullLog['dataDirDf'] = dataDfOutput
+    except:
+        pass
+    try:
+        fullLog['backupDirDf'] = backupDfOutput
+    except:
+        pass
+    try:
+        fullLog['backupToDataRatio'] = backupToDataRatio
+    except:
+        pass
+    try:
+        fullLog['cpuData'] = lscpuOutput
+    except:
+        pass
+    try:
+        fullLog['totalMemory'] = memResponse.values()[0]
+    except:
+        pass
+    try:
+        fullLog['linuxVersion'] = vResponse
+    except:
+        pass
 except:
     fullLog={}
 
@@ -701,23 +744,7 @@ except:
 
 # add current time
 ts = time.time()
-fullLog['creationTime'] = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-
-# write data to disk
-# data filename
-dfName = "/tmp/dataOutput_{}.json".format(siteID)
-# write to disk
-with open(dfName, "w") as f:
-    json.dump(fullLog,f)
-
-# process the summary
-summaryStr = '\n'.join(summary)
-# summary filename
-sfName = "/tmp/summary_{}.txt".format(siteID)
-# write to disk
-with open(sfName,'w') as f:
-    f.writelines(summaryStr)
-    
+fullLog['creationTime'] = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')    
 
 # print our the full log
 print('##########')
@@ -749,3 +776,21 @@ elif not versionFlag:
 elif not seFlag:
     print(colPrint('Please contact customer care. Schema equivalence check failed!','R'))
     print(seResponse)
+    
+try:
+    # write data to disk
+    # data filename
+    dfName = "/tmp/dataOutput_{}.json".format(siteID)
+    # write to disk
+    with open(dfName, "w") as f:
+        json.dump(fullLog,f)
+
+    # process the summary
+    summaryStr = '\n'.join(summary)
+    # summary filename
+    sfName = "/tmp/summary_{}.txt".format(siteID)
+    # write to disk
+    with open(sfName,'w') as f:
+        f.writelines(summaryStr)
+except:
+    pass
