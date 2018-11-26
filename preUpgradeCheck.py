@@ -71,13 +71,13 @@ def colPrint(inStr,color):
     # create output templates
     if color == 'G':
         # all clear = green
-        colPrintOut = '\x1b[6;30;42m' + '{}'.format(inStr) + '\x1b[0m'
+        colPrintOut = '\x1b[6;30;42m' + inStr + '\x1b[0m'
     elif color == 'R':
         # warning = red
-        colPrintOut = '\x1b[6;30;41m' + '{}'.format(inStr) + '\x1b[0m'
+        colPrintOut = '\x1b[6;30;41m' + inStr + '\x1b[0m'
     elif color == 'O':
         # caution = orange
-        colPrintOut = '\x1b[6;30;43m' + '{}'.format(inStr) + '\x1b[0m'
+        colPrintOut = '\x1b[6;30;43m' + inStr + '\x1b[0m'
         
     return(colPrintOut)
 
@@ -596,7 +596,6 @@ try:
 except:
     versionFlag = False
     flag410 = False
-    
     print(colPrint('WARNING! Version check failed! Please make sure Alation version is > 4.10.x','R'))
 
 
