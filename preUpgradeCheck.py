@@ -207,18 +207,18 @@ def minSpaceCheck(summary):
     availSize = float(re.sub("\D", "", installDfOutput['Available']))
     # check if there is at least MINDISKSPACE GB space available
     if availSize > MINDISKSPACE:
-        print('Minimum {}GB disk space (available = {}GB): '.format(MINDISKSPACE,availSize) + colPrint('OK!','G'))
+        print('Minimum {}GB disk space (available in /opt/alation = {}GB): '.format(MINDISKSPACE,availSize) + colPrint('OK!','G'))
         summary.append('Minimum space requirement met: OK')
         diskFlag = True
     else:
-        print('Minimum 10GB disk space (available = {}GB): '.format(availSize) + colPrint('FAIL!','R'))
+        print('Minimum 10GB disk space (available in /opt/alation = {}GB): '.format(availSize) + colPrint('FAIL!','R'))
         diskFlag = False
         summary.append('Minimum space requirement not met: FAIL')
 
     # check if disk is at least 90% full
     usage = float(re.sub("\D", "", installDfOutput['Use%']))
     if usage >= WARNINGATDISKUSE:
-        print(colPrint('Caution! Disk is {}% full'.format(usage),'O'))
+        print(colPrint('Caution! /opt/alation is {}% full'.format(usage),'O'))
         
     return(installDfOutput,availSize,summary,usage,diskFlag)
     
@@ -379,13 +379,14 @@ def mongoCheck(summary,fullLog):
 
     # check if available disk space is at least MONGOx the size of mongoDB
     availDataSpace = float(re.sub("\D", "", fullLog['dataDirDf']['Available']))
+    print('Space available in data drive: {}GB'.format(availDataSpace))
 
     if availDataSpace/mongoSize > MONGOx:
-        print('Available space {}GB is at least {}x greater than mongoDB size {}GB: {}'.format(availDataSpace,MONGOx,mongoSize,colPrint('OK!','G')))
+        print('Available space {}GB in /data1/ is at least {}x greater than mongoDB size {}GB: {}'.format(availDataSpace,MONGOx,mongoSize,colPrint('OK!','G')))
         summary.append('MongoDB space check passed: OK')
         mongoFlag = True
     else:
-        print('{} Not enough space available space to update to Alation V R2 or higher! Mongo size = {}GB, available size = {}GB.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
+        print('{} Not enough space available space in /data1/ to update to Alation V R2 or higher! Mongo size = {}GB, available size = {}GB.'.format(colPrint('FAIL!','R'),mongoSize,availDataSpace))
         mongoFlag = False
         summary.append('MongoDB space check not passed: FAIL')
     
@@ -405,11 +406,11 @@ def pgSQLCheck(summary,fullLog):
 
     # run the check
     if availDataSpace/pgsqlSize > PGSQLx:
-        print('(For Alation Analytics) Available space {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
+        print('(For Alation Analytics) Available space in /data1/ {}GB is at least {}x greater than postgreSQL size {}GB: {}'.format(availDataSpace,PGSQLx,pgsqlSize,colPrint('OK!','G')))
         summary.append('postgreSQL for Analytics space check passed: OK')
         pgsqlFlag = True
     else:
-        print('{} Not enough space available space to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colPrint('WARNING','O'),pgsqlSize,availDataSpace))
+        print('{} Not enough space available space in /data1/ to turn on analytics. postgreSQL size = {}, available size = {}.'.format(colPrint('WARNING','O'),pgsqlSize,availDataSpace))
         pgsqlFlag = False
         summary.append('postgreSQL for Analytics space check not passed: FAIL')
 
@@ -582,7 +583,7 @@ def alationVerHist():
 # ## Configuration parameters
 # config
 # minimum empty disk requirement
-MINDISKSPACE = 8.0
+MINDISKSPACE = 15.0
 # warn if disk is at or above below percentage
 WARNINGATDISKUSE = 90.0
 # critical MINIMUM major version to check for
@@ -598,6 +599,10 @@ MONGOx = 2
 # in order to turn on analytics, the pgsql folder will doulbe 
 # in size.
 PGSQLx = 2
+# flag to indicate code failure
+failure = False
+# steps to be run manually
+steps = []
 
 # summary object for the end
 summary = []
@@ -612,6 +617,8 @@ try:
 except:
     versionFlag = False
     flag410 = False
+    failure = True
+    steps.append('2')
     print(colPrint('WARNING! Version check failed! Please make sure Alation version is > 4.10.x','R'))
 
 
@@ -620,6 +627,8 @@ try:
     summary,replicationMode,replicationFlag = replicationCheck(summary)
 except:
     replicationFlag = False
+    failure = True
+    steps.append('3')
     print(colPrint('WARNING! Replication check failed! Please make sure the installation is standalone!','R'))
 
 
@@ -628,6 +637,8 @@ try:
     installDfOutput,availSize,summary,usage,diskFlag = minSpaceCheck(summary)
 except:
     diskFlag = False
+    failure = True
+    steps.append('4')
     print(colPrint('WARNING! Minimum space check failed! Please make sure /opt/alation has 8GB free space.','R'))
 
 
@@ -636,6 +647,8 @@ try:
     summary,backupToDataRatio,backupDfOutput,storageFlag,mountFlag,dataDfOutput = dataAndBackupDriveCheck(summary)
 except:
     storageFlag,mountFlag = False,False
+    failure = True
+    steps.append('5')
     print(colPrint('WARNING! Could not verify separation of data and backup disk!','R'))
 
 
@@ -644,6 +657,8 @@ try:
     summary,backupFlag,backupFiles = confirmBackups(summary)
 except:
     backupFlag = False
+    failure = True
+    steps.append('6')
     print(colPrint('WARNING! Could not verify backups!','R'))
 
 
@@ -721,6 +736,8 @@ try:
     summary,mongoFlag,fullLog,availDataSpace,mongoSize = mongoCheck(summary,fullLog)
 except:
     mongoFlag = False
+    failure = True
+    steps.append('8')
     print(colPrint('WARNING! Could not check disk space for MongoDB!','R'))
 
 # ## postgreSQL Check
@@ -728,6 +745,8 @@ try:
     combinedSpaceFlag,pgsqlFlag,summary,fullLog = pgSQLCheck(summary,fullLog)
 except:
     combinedSpaceFlag,pgsqlFlag = False,False
+    failure = True
+    steps.append('10')
     print(colPrint('Caution! Could not verify the space requirements for Alation Analytics!','O'))
 
 # ## Query alation_conf for Datadog check and site_id
@@ -750,6 +769,8 @@ try:
 except:
     print(colPrint('WARNING! Could not perform engineering checks','R'))
     seFlag = False
+    failure = True
+    steps.append('11')
 
 # ## Symbolic Link Check
 # we need to check if /opt and /opt/alation/ is a symbolic link or not
@@ -781,7 +802,7 @@ elif not backupFlag:
     print(colPrint('Do not proceed with upgrade. Please check backup!','R'))
 # not enough mongo space
 elif not mongoFlag:
-    print(colPrint('Not enough space for mongoDB!','R'))
+    print(colPrint('Not enough space for mongoDB or the code could not read the disk size!','R'))
 elif not replicationFlag:
     print(colPrint('Please follow the High-Availability install instructions here: https://alationhelp.zendesk.com/hc/en-us/articles/115006108927-Upgrade-on-an-HA-Pair-Configuration-4-7-and-above-','O'))
 elif flag410:
@@ -793,7 +814,10 @@ elif not versionFlag:
 elif not seFlag:
     print(colPrint('Please contact customer care. Schema equivalence check failed!','R'))
     print(seResponse)
-    
+
+if failure:
+    print(colPrint('Python failed to verify some information.\nPlease follow manual instruction step 1 + step(s) {} in the readiness guide.'.format(','.join(steps)),'O'))
+
 try:
     # write data to disk
     # data filename
