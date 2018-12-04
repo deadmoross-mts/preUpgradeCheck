@@ -81,51 +81,6 @@ def colPrint(inStr,color):
         
     return(colPrintOut)
 
-engCheckCode = """# import libraries
-import bootstrap_rosemeta
-from object_synchronization.service.equivalence import EquivalenceSetMaterializer, SchemaEquivalenceMaterializer
-from rosemeta.models import SchemaEquivalence, Table
-from rosemeta.models import CustomFieldValue
-from logical_metadata.models.models_values import PickerFieldValueDiff
-from rosemeta.models.enums import CustomFieldType
-from django.db import connection
-
-# safe limit
-GROUP_SAFE_LIMIT = 100000
-
-# Schema Equivalence check: This is the only function for it
-def check_schema_equivalence(checkSummary):
-    schema_groups = SchemaEquivalence.objects.all().values_list('group_id', flat=True).distinct()
-    for schema_eq_group_id in schema_groups:
-        checkSummary.append("Processing schema equivalence group {}".format(schema_eq_group_id))
-        schema_ids = SchemaEquivalence.objects.filter(group_id=schema_eq_group_id).values_list('schema_id', flat=True)
-        table_groups = EquivalenceSetMaterializer._fetch_groups(Table._meta.db_table, 'schema_obj_id', schema_ids)
-        attr_groups = SchemaEquivalenceMaterializer._fetch_attr_groups(schema_ids)
-        checkSummary.append("Table equivalences groups: {}".format(len(table_groups)))
-        checkSummary.append("Column equivalences groups: {}".format(len(attr_groups)))
-        if len(table_groups) < GROUP_SAFE_LIMIT and len(attr_groups) < GROUP_SAFE_LIMIT:
-            checkSummary.append("Schema equivalence group {} is ok".format(schema_eq_group_id))
-        else:
-            checkSummary.append("CAN NOT UPGRADE BECAUSE OF SCHEMA EQUIVALENCE({}) HAS TOO MANY CHILDREN GROUPS".format(schema_eq_group_id))
-            return(False,checkSummary)
- 
-    return (True,checkSummary)
-
-checkSummary = []      
-checkRes,checkSummary = check_schema_equivalence(checkSummary)
-
-if checkRes:
-     print("flag:0")
-else:
-     print("flag:1")"""
-
-# write engineering check code to the correct location
-try:
-    with open('/opt/alation/alation/opt/alation/django/rosemeta/one_off_scripts/engineeringChecks.py','w') as f:
-        f.writelines(engCheckCode)
-except:
-    pass
-
 # ## Version information check
 def versionCheck(summary):
     # run the version check
@@ -451,65 +406,6 @@ def siteIDExtract(fullLog):
     
     return(fullLog,siteID)
     
-# ## Engineering Checks
-def seCheck(summary):
-    # try to run the code which should have been created earlier
-    try:
-        # create bash command
-        cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-        python /opt/alation/django/rosemeta/one_off_scripts/engineeringChecks.py"""
-
-        # get response
-        seResponse = bashCMD(cmd)
-
-        # obtain the check result
-        res = int(seResponse.split(',')[0].split(':')[1])
-
-        # pass case
-        if res == 0:
-            # print the success message
-            print("Schema Equivelance Check: {}".format(colPrint('OK!','G')))
-            summary.append('Schema Equivelance Check: OK')
-            seFlag = True
-        else:
-            # failure case
-            print('Schema Equivelance Check: {}'.format(colPrint('FAIL!','R')))
-            print('Check Result: {}'.format(res))
-            summary.append('Schema Equivelance Check: FAIL')
-            seFlag = False
-                    
-
-    # if not, then try running curl
-    except:
-        print(colPrint('Cannot find engineering check code created earlier. Tryin to curl code form GitHub.','O'))
-        # ## Engineering Check
-        # create bash command
-        cmd = """sudo chroot "/opt/alation/alation" /bin/su - alation
-        cd /opt/alation/django/rosemeta/one_off_scripts/
-        sudo curl https://raw.githubusercontent.com/mandeepsingh-alation/preUpgradeCheck/master/engineeringChecks.py --output engineeringChecks.py
-        python engineeringChecks.py"""
-
-        # get response
-        seResponse = bashCMD(cmd)
-
-        # obtain the check result
-        res = int(seResponse.split(',')[0].split(':')[1])
-
-        # pass case
-        if res == 0:
-            # print the success message
-            print("Schema Equivelance Check: {}".format(colPrint('OK!','G')))
-            summary.append('Schema Equivelance Check: OK')
-            seFlag = True
-        else:
-            # failure case
-            print('Schema Equivelance Check: {}'.format(colPrint('FAIL!','R')))
-            print('Check Result: {}'.format(res))
-            summary.append('Schema Equivelance Check: FAIL')
-            seFlag = False
-            
-    return(seFlag,seResponse,summary)
-
 # parse out the information 
 def fileParser(inMessage):
     if len(inMessage) > 1 and ':' in inMessage:
@@ -762,16 +658,6 @@ try:
 except:
     siteID = 'NA'
 
-# ## Engineering Check
-try:
-    print('Running Engineering Checks. Please wait!')
-    seFlag,seResponse,summary = seCheck(summary)
-except:
-    print(colPrint('WARNING! Could not perform engineering checks','R'))
-    seFlag = False
-    failure = True
-    steps.append('11')
-
 # ## Symbolic Link Check
 # we need to check if /opt and /opt/alation/ is a symbolic link or not
 try:
@@ -791,7 +677,7 @@ print('##########')
 
 # create, share, and save a summary
 # everything worked
-if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and seFlag and mongoFlag and optFlag and optAlationFlag:
+if versionFlag and not flag410 and backupFlag and storageFlag and mountFlag and diskFlag and replicationFlag and mongoFlag and optFlag and optAlationFlag:
     print(colPrint('All critical checks passed.\nPlease copy and send all the output back to Alation!','G'))
     print('Upgrade Readiness Check complete.')
 # now enough storage
@@ -811,9 +697,6 @@ elif not mountFlag or not storageFlag:
     print(colPrint('Backup and data drives share same device!','O'))
 elif not versionFlag:
     print(colPrint('Please contact customer care. Version not supported!','R'))
-elif not seFlag:
-    print(colPrint('Please contact customer care. Schema equivalence check failed!','R'))
-    print(seResponse)
 
 if failure:
     print(colPrint('Python failed to verify some information.\nPlease follow manual instruction step 1 + step(s) {} in the readiness guide.'.format(','.join(steps)),'O'))
