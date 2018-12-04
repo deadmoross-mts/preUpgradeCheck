@@ -166,7 +166,7 @@ def minSpaceCheck(summary):
         summary.append('Minimum space requirement met: OK')
         diskFlag = True
     else:
-        print('Minimum 10GB disk space (available in /opt/alation = {}GB): '.format(availSize) + colPrint('FAIL!','R'))
+        print('Minimum {}GB disk space (available in /opt/alation = {}GB): '.format(MINDISKSPACE,availSize) + colPrint('FAIL!','R'))
         diskFlag = False
         summary.append('Minimum space requirement not met: FAIL')
 
