@@ -15,7 +15,8 @@
     6. MongoDB health check
     7. postgreSQL size check
     8. Datadog activation check
-    9. Schema Equivalence Check
+    9. Symbolic Link Check
+    
 
 
 ## Instructions
